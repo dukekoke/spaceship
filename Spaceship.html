@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (強制啟動版)</title>
+    <title>太空飛船：隕城危機 3D (全設備通殺版)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -64,35 +64,30 @@
             width: 100%;
         }
         
-        /* 十字鍵 */
-        .dpad-container {
-            width: 150px;
-            height: 150px;
-            position: relative;
+        /* 虛擬搖桿 */
+        .joystick-base {
+            width: 140px;
+            height: 140px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            backdrop-filter: blur(5px);
             border: 2px solid rgba(255, 255, 255, 0.3);
-        }
-        .dpad-btn {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
+            border-radius: 50%;
+            position: relative;
+            backdrop-filter: blur(5px);
             display: flex;
             justify-content: center;
             align-items: center;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 8px;
-            cursor: pointer;
+            touch-action: none;
         }
-        .dpad-btn:active { background: rgba(255, 255, 255, 0.5); }
-        
-        #btn-up { top: 0; left: 50px; width: 50px; height: 60px; }
-        #btn-down { bottom: 0; left: 50px; width: 50px; height: 60px; }
-        #btn-left { top: 50px; left: 0; width: 60px; height: 50px; }
-        #btn-right { top: 50px; right: 0; width: 60px; height: 50px; }
+        .joystick-handle {
+            width: 55px;
+            height: 55px;
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
 
         /* 發射鍵 */
         #btn-fire {
@@ -113,7 +108,7 @@
         }
         #btn-fire:active { background: rgba(255, 100, 100, 0.7); }
 
-        /* 介面遮罩 */
+        /* 介面遮罩層 */
         .overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -123,7 +118,7 @@
             align-items: center;
             color: white;
             z-index: 100;
-            pointer-events: auto; /* 開啟點擊 */
+            pointer-events: auto; /* 開啟全域點擊事件 */
         }
         .menu-card {
             background: rgba(30, 30, 40, 0.9);
@@ -137,6 +132,7 @@
         }
         .menu-card h1 { margin-top: 0; color: #00bfff; }
         
+        /* 進入太空按鈕 */
         .start-btn {
             background: #00bfff; border: none; color: white;
             padding: 12px 30px; font-size: 18px; font-weight: bold;
@@ -172,11 +168,8 @@
             <div id="hud-score">分數: 0</div>
         </div>
         <div class="controls">
-            <div class="dpad-container">
-                <div class="dpad-btn" id="btn-up">↑</div>
-                <div class="dpad-btn" id="btn-down">↓</div>
-                <div class="dpad-btn" id="btn-left">←</div>
-                <div class="dpad-btn" id="btn-right">→</div>
+            <div class="joystick-base" id="joy-base">
+                <div class="joystick-handle" id="joy-handle"></div>
             </div>
             <div id="btn-fire">發射</div>
         </div>
@@ -186,12 +179,12 @@
         <div class="menu-card">
             <h1>太空飛船：隕城危機 3D</h1>
             <p style="text-align: left; font-size: 14px; line-height: 1.6;">
-               1. 左手【十字鍵】：控制飛船上下左右移動。<br>
-               2. 【雙模翻轉】：支援手機左右傾斜（陀螺儀）。若無陀螺儀，飛船會隨移動方向自動傾斜。<br>
-               3. 右手【紅色按鈕】：發射雷射。電腦可按 <strong>Enter</strong> 或 空白鍵 發射。<br>
+               1. 左手【圓圈搖桿】：任意方向滑動進行精確 360 度位移控制。<br>
+               2. 【雙模翻轉】：支援手機陀螺儀。若無感應器，飛船會隨移動自動翻轉。<br>
+               3. 右手【紅色按鈕】：發射雷射。電腦上支援 <strong>Enter</strong> 或 <strong>空白鍵</strong>，或按 <strong>WASD/方向鍵</strong> 移動。<br>
                4. 穿過藍色<strong>「宇宙圈」</strong>可獲得 <strong>+100分</strong>！
             </p>
-            <button class="start-btn" id="btn-start">進入太空</button>
+            <button class="start-btn" onclick="requestOrientationPermission()">進入太空</button>
         </div>
     </div>
 
@@ -206,7 +199,7 @@
                 </thead>
                 <tbody id="leaderboard-body"></tbody>
             </table>
-            <button class="start-btn" id="btn-restart" style="background:#ff4d4d;">再試一次</button>
+            <button class="start-btn" style="background:#ff4d4d;" onclick="restartGame()">再試一次</button>
         </div>
     </div>
 
@@ -233,11 +226,11 @@
         let currentRoll = 0;
         let hasGyro = false; 
 
+        let joystickVector = { x: 0, y: 0 };
         const inputState = { up: false, down: false, left: false, right: false };
 
         window.onload = function() {
             init();
-            animate();
         };
 
         function init() {
@@ -265,6 +258,7 @@
 
             window.addEventListener('resize', onWindowResize);
             setupControls();
+            animate();
         }
 
         function updateScreenBounds() {
@@ -380,7 +374,6 @@
             }
 
             geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            
             const mat = new THREE.PointsMaterial({
                 size: 0.5,
                 color: colorHex,
@@ -391,7 +384,6 @@
 
             const particleSystem = new THREE.Points(geo, mat);
             particleSystem.userData = { velocities: velocities, age: 0, maxAge: 0.6 };
-
             scene.add(particleSystem);
             particlesSystems.push(particleSystem);
         }
@@ -401,50 +393,68 @@
         
         function fireProjectile() {
             if(!gameActive) return;
-            
             const geo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
             geo.rotateX(Math.PI / 2); 
             const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
             const projectile = new THREE.Mesh(geo, mat);
-            
             projectile.position.copy(spaceship.position);
             projectile.rotation.z = spaceship.rotation.z;
-            
             scene.add(projectile);
             projectiles.push(projectile);
         }
 
-        function setupControls() {
-            const startBtn = document.getElementById('btn-start');
-            const restartBtn = document.getElementById('btn-restart');
+        function initJoystick() {
+            const base = document.getElementById('joy-base');
+            const handle = document.getElementById('joy-handle');
+            let isDragging = false;
+            const maxRadius = 45; 
 
-            // 綁定多重監聽事件，確保滑鼠與觸控完全不被阻擋
-            ['click', 'touchstart', 'pointerdown'].forEach(evtType => {
-                startBtn.addEventListener(evtType, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    requestOrientationPermission();
-                }, { passive: false });
+            function handleMove(clientX, clientY) {
+                if (!isDragging) return;
+                const rect = base.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                let deltaX = clientX - centerX;
+                let deltaY = clientY - centerY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-                restartBtn.addEventListener(evtType, (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    restartGame();
-                }, { passive: false });
+                if (distance > maxRadius) {
+                    deltaX = (deltaX / distance) * maxRadius;
+                    deltaY = (deltaY / distance) * maxRadius;
+                }
+                handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                joystickVector.x = deltaX / maxRadius;
+                joystickVector.y = -(deltaY / maxRadius);
+            }
+
+            function handleEnd() {
+                isDragging = false;
+                handle.style.transform = `translate(0px, 0px)`; 
+                joystickVector.x = 0;
+                joystickVector.y = 0;
+            }
+
+            base.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
             });
+            window.addEventListener('touchmove', (e) => {
+                if (isDragging) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            });
+            window.addEventListener('touchend', handleEnd);
 
-            const bindDpad = (id, direction) => {
-                const btn = document.getElementById(id);
-                btn.addEventListener('touchstart', (e) => { e.preventDefault(); inputState[direction] = true; });
-                btn.addEventListener('touchend', () => inputState[direction] = false);
-                btn.addEventListener('mousedown', () => inputState[direction] = true);
-                btn.addEventListener('mouseup', () => inputState[direction] = false);
-            };
+            base.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                handleMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mousemove', (e) => {
+                handleMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mouseup', handleEnd);
+        }
 
-            bindDpad('btn-up', 'up');
-            bindDpad('btn-down', 'down');
-            bindDpad('btn-left', 'left');
-            bindDpad('btn-right', 'right');
+        function setupControls() {
+            initJoystick();
 
             const btnFire = document.getElementById('btn-fire');
             btnFire.addEventListener('touchstart', (e) => { e.preventDefault(); fireProjectile(); });
@@ -474,7 +484,7 @@
             });
         }
 
-        // 強制解鎖權限請求
+        // 全設備安全解鎖器（直接在 HTML 被 click 呼叫，不依賴 JS 監聽）
         function requestOrientationPermission() {
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -485,16 +495,12 @@
                             }
                             startGame();
                         })
-                        .catch(err => {
-                            console.log("iOS 陀螺儀請求遭拒，直接啟動遊戲。");
-                            startGame();
-                        });
+                        .catch(() => { startGame(); });
                 } else {
                     window.addEventListener('deviceorientation', handleOrientation);
                     startGame();
                 }
             } catch (e) {
-                // 發生任何未知錯誤，一律強制進入遊戲
                 startGame();
             }
         }
@@ -506,32 +512,21 @@
             } else {
                 return;
             }
-
             let tilt = 0;
-            if (window.orientation === 90) {
-                tilt = event.beta; 
-            } else if (window.orientation === -90) {
-                tilt = -event.beta;
-            } else {
-                tilt = event.gamma; 
-            }
+            if (window.orientation === 90) { tilt = event.beta; } 
+            else if (window.orientation === -90) { tilt = -event.beta; } 
+            else { tilt = event.gamma; }
             let ratio = tilt / 45;
-            if(ratio > 1) ratio = 1;
-            if(ratio < -1) ratio = -1;
+            if(ratio > 1) ratio = 1; if(ratio < -1) ratio = -1;
             targetRoll = ratio * (Math.PI / 2);
         }
 
         function startGame() {
-            // 隱藏選單
             document.getElementById('start-overlay').style.display = 'none';
-            window.focus(); // 視窗主動聚焦，確保鍵盤能立刻接收指令
+            window.focus(); 
             
             gameActive = true;
-            hp = 100;
-            score = 0;
-            gameTime = 0;
-            spawnTimer = 0;
-            spawnInterval = 1000;
+            hp = 100; score = 0; gameTime = 0; spawnTimer = 0; spawnInterval = 1000;
             document.getElementById('hud-hp').innerText = `HP: ${hp}`;
             document.getElementById('hud-score').innerText = `分數: ${score}`;
             
@@ -543,8 +538,8 @@
             particlesSystems = [];
             
             spaceship.position.set(0, 0, 0);
-            targetRoll = 0;
-            currentRoll = 0;
+            joystickVector.x = 0; joystickVector.y = 0;
+            targetRoll = 0; currentRoll = 0;
             spawnObject();
         }
 
@@ -596,26 +591,25 @@
                 score += delta * 10; 
                 document.getElementById('hud-score').innerText = `分數: ${Math.floor(score)}`;
 
-                let moveX = 0; let moveY = 0;
+                let moveX = joystickVector.x;
+                let moveY = joystickVector.y;
+
                 if (inputState.up) moveY += 1;
                 if (inputState.down) moveY -= 1;
                 if (inputState.left) moveX -= 1;
                 if (inputState.right) moveX += 1;
 
-                if (moveX !== 0 && moveY !== 0) { moveX *= 0.7071; moveY *= 0.7071; }
+                const vectorLen = Math.sqrt(moveX * moveX + moveY * moveY);
+                if (vectorLen > 1) { moveX /= vectorLen; moveY /= vectorLen; }
 
                 spaceship.position.x += moveX * moveSpeed * delta;
                 spaceship.position.y += moveY * moveSpeed * delta;
-
                 spaceship.position.x = Math.max(-boundsX, Math.min(boundsX, spaceship.position.x));
                 spaceship.position.y = Math.max(-boundsY, Math.min(boundsY, spaceship.position.y));
 
                 if (!hasGyro) {
-                    if (moveX !== 0) {
-                        targetRoll = -moveX * (Math.PI / 3);
-                    } else {
-                        targetRoll *= 0.9; 
-                    }
+                    if (moveX !== 0) { targetRoll = -moveX * (Math.PI / 3); } 
+                    else { targetRoll *= 0.9; }
                 }
 
                 currentRoll += (targetRoll - currentRoll) * 0.12;
@@ -623,43 +617,31 @@
                 spaceship.rotation.y = currentRoll * 0.2; 
 
                 spawnInterval = Math.max(200, 1000 - (gameTime * 15));
-
                 starField.position.z += baseSpeed * delta;
                 if (starField.position.z > 200) starField.position.z = 0;
 
                 spawnTimer += delta * 1000;
-                if (spawnTimer >= spawnInterval) {
-                    spawnObject();
-                    spawnTimer = 0;
-                }
+                if (spawnTimer >= spawnInterval) { spawnObject(); spawnTimer = 0; }
 
                 // 子彈碰撞
                 for (let i = projectiles.length - 1; i >= 0; i--) {
                     const projectile = projectiles[i];
                     projectile.position.z -= projectileSpeed * delta;
-
                     if (projectile.position.z < -100) {
-                        scene.remove(projectile);
-                        projectiles.splice(i, 1);
-                        continue;
+                        scene.remove(projectile); projectiles.splice(i, 1); continue;
                     }
-
                     for (let j = obstacles.length - 1; j >= 0; j--) {
                         const obstacle = obstacles[j];
                         if (obstacle.userData.type === 'asteroid' && !obstacle.userData.hit) {
                             const dist = projectile.position.distanceTo(obstacle.position);
                             if (dist < obstacle.userData.radius) {
                                 obstacle.userData.hit = true;
-                                
                                 let pCount = 20;
                                 if (obstacle.userData.sizeType === 'large') pCount = 55;
                                 if (obstacle.userData.sizeType === 'small') pCount = 12;
-
                                 createExplosion(obstacle.position, 0xd2691e, pCount);
-                                scene.remove(obstacle);
-                                obstacles.splice(j, 1);
-                                scene.remove(projectile);
-                                projectiles.splice(i, 1);
+                                scene.remove(obstacle); obstacles.splice(j, 1);
+                                scene.remove(projectile); projectiles.splice(i, 1);
                                 break; 
                             }
                         }
@@ -670,9 +652,7 @@
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     const obj = obstacles[i];
                     obj.position.z += baseSpeed * delta;
-
-                    obj.rotation.x += obj.userData.rotX;
-                    obj.rotation.y += obj.userData.rotY;
+                    obj.rotation.x += obj.userData.rotX; obj.rotation.y += obj.userData.rotY;
 
                     if (!obj.userData.hit && obj.position.z >= -1.5 && obj.position.z <= 1.5) {
                         const leftWingWorld = new THREE.Vector3();
@@ -686,10 +666,8 @@
 
                         if (distToLeft < obj.userData.radius || distToRight < obj.userData.radius || distToBody < obj.userData.radius * 0.7) {
                             obj.userData.hit = true;
-
                             if (obj.userData.type === 'asteroid') {
-                                hp -= 25;
-                                if (hp < 0) hp = 0;
+                                hp -= 25; if (hp < 0) hp = 0;
                                 document.getElementById('hud-hp').innerText = `HP: ${hp}`;
                                 flashScreen('#ff3333');
                                 createExplosion(obj.position, 0xff0000, 20);
@@ -705,17 +683,10 @@
                                 flashScreen('#00ffff');
                                 createExplosion(obj.position, 0x00ffff, 25);
                             }
-
-                            scene.remove(obj);
-                            obstacles.splice(i, 1);
-                            continue;
+                            scene.remove(obj); obstacles.splice(i, 1); continue;
                         }
                     }
-
-                    if (obj.position.z > 15) {
-                        scene.remove(obj);
-                        obstacles.splice(i, 1);
-                    }
+                    if (obj.position.z > 15) { scene.remove(obj); obstacles.splice(i, 1); }
                 }
             }
 
@@ -723,37 +694,27 @@
             for (let i = particlesSystems.length - 1; i >= 0; i--) {
                 const sys = particlesSystems[i];
                 sys.userData.age += delta;
-
                 const posAttr = sys.geometry.attributes.position;
                 const vels = sys.userData.velocities;
-
                 for (let j = 0; j < vels.length; j++) {
                     posAttr.array[j * 3] += vels[j].x * delta;
                     posAttr.array[j * 3 + 1] += vels[j].y * delta;
                     posAttr.array[j * 3 + 2] += vels[j].z * delta;
                 }
                 posAttr.needsUpdate = true;
-
                 const lifeRatio = sys.userData.age / sys.userData.maxAge;
                 sys.material.opacity = 1.0 - lifeRatio;
                 sys.material.size = 0.5 * (1.0 - lifeRatio * 0.5);
-
                 if (sys.userData.age >= sys.userData.maxAge) {
-                    scene.remove(sys);
-                    sys.geometry.dispose();
-                    sys.material.dispose();
-                    particlesSystems.splice(i, 1);
+                    scene.remove(sys); sys.geometry.dispose(); sys.material.dispose(); particlesSystems.splice(i, 1);
                 }
             }
-
             renderer.render(scene, camera);
         }
 
         function flashScreen(color) {
             scene.background = new THREE.Color(color);
-            setTimeout(() => {
-                if(scene) scene.background = new THREE.Color(0x020208);
-            }, 120);
+            setTimeout(() => { if(scene) scene.background = new THREE.Color(0x020208); }, 120);
         }
 
         function onWindowResize() {
