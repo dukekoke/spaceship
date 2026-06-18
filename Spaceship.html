@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>太空飛船：隕石危機 3D</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        /* 強制橫屏提示（如果是直屏的話） */
+        @media screen and (orientation: portrait) {
+            #portrait-warning {
+                display: flex !important;
+            }
+        }
+        #portrait-warning {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; color: white;
+            z-index: 9999; justify-content: center; align-items: center;
+            text-align: center; font-size: 24px; padding: 20px;
+        }
+
+        /* 遊戲畫布 */
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI 介面 */
+        .ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* 讓點擊穿透到按鈕 */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* 控制按鈕 */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto; /* 啟用點擊 */
+            backdrop-filter: blur(5px);
+        }
+        .btn:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* 選單與彈窗 */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+
+        .menu-card {
+            background: rgba(30, 30, 40, 0.9);
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 0 20px rgba(0,191,255,0.5);
+        }
+
+        .menu-card h1 { margin-top: 0; color: #00bfff; }
+        .start-btn {
+            background: #00bfff; border: none; color: white;
+            padding: 12px 30px; font-size: 18px; font-weight: bold;
+            border-radius: 5px; cursor: pointer; margin-top: 15px;
+        }
+
+        /* 排行榜表格 */
+        .leaderboard-table {
+            width: 100%;
+            margin: 15px 0;
+            border-collapse: collapse;
+        }
+        .leaderboard-table th, .leaderboard-table td {
+            border-bottom: 1px solid #444;
+            padding: 6px;
+            font-size: 14px;
+        }
+        .leaderboard-table th { color: #00bfff; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="portrait-warning">請將手機旋轉為【橫屏】進行遊戲 🔄</div>
+
+    <div id="canvas-container"></div>
+
+    <div class="ui-layer">
+        <div class="hud">
+            <div id="hud-hp">HP: 100</div>
+            <div id="hud-speed">速度: 50 </div>
+            <div id="hud-score">分數 (時間): 0s</div>
+        </div>
+        <div class="controls">
+            <div class="btn" id="btn-acc">油門 (加速)</div>
+            <div class="btn" id="btn-dec">減速</div>
+        </div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+        <div class="menu-card">
+            <h1>太空飛船：隕石危機</h1>
+            <p>使用手機陀螺儀【左右傾斜】控制飛船旋轉，避開隕石並收集綠色修理包！</p>
+            <button class="start-btn" id="btn-start">點擊開始遊戲 (授權陀螺儀)</button>
+        </div>
+    </div>
+
+    <div id="gameover-overlay" class="overlay" style="display: none;">
+        <div class="menu-card">
+            <h1 style="color: #ff4d4d;">GAME OVER</h1>
+            <p>本次得分: <span id="final-score" style="color:#fff; font-size:20px; font-weight:bold;">0</span> 秒</p>
+            
+            <h3>🏆 本地排行榜</h3>
+            <table class="leaderboard-table">
+                <thead>
+                    <tr><th>名次</th><th>存活時間 (秒)</th><th>日期</th></tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    </tbody>
+            </table>
+
+            <button class="start-btn" id="btn-restart" style="background:#ff4d4d;">再試一次</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 遊戲變數定義 ---
+        let scene, camera, renderer;
+        let spaceship, leftWing, rightWing;
+        let starField;
+        let obstacles = []; // 包含隕石與修理包
+        let gameActive = false;
+        
+        // 遊戲參數
+        let hp = 100;
+        let baseSpeed = 50; // 基礎前進速度
+        let speedModifier = 1; // 玩家加速減速倍率
+        let gameTime = 0; // 分數
+        let spawnTimer = 0;
+        let spawnInterval = 1000; // 初始每 1000ms 生成一個物體
+        
+        // 控制變數
+        let targetRoll = 0; // 目標旋轉角度 (弧度)
+        let currentRoll = 0;
+
+        // 初始化
+        init();
+        animate();
+
+        function init() {
+            // 1. 建立 3D 場景
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x000000, 0.005); // 太空霧氣效果
+
+            // 2. 攝影機 (第三人稱：位於後方並往前看)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 15); // 位於飛船後方 15 單位，上方 5 單位
+            camera.lookAt(0, 0, -10);
+
+            // 3. 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // 4. 燈光
+            const ambientLight = new THREE.AmbientLight(0x333333);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(5, 10, 7);
+            scene.add(dirLight);
+
+            // 5. 建立星空背景
+            createStarfield();
+
+            // 6. 建立玩家太空船 (包含左右襟翼)
+            createSpaceship();
+
+            // 監聽視窗縮放
+            window.addEventListener('resize', onWindowResize);
+
+            // 綁定 UI 事件
+            setupControls();
+        }
+
+        // --- 建立物件函式 ---
+        function createSpaceship() {
+            spaceship = new THREE.Group();
+
+            // 船身 (圓錐體)
+            const bodyGeo = new THREE.ConeGeometry(0.8, 4, 8);
+            bodyGeo.rotateX(Math.PI / 2); // 讓圓錐朝向前方 (-Z)
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.8, roughness: 0.2 });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            spaceship.add(bodyMesh);
+
+            // 左襟翼 (扁平長方體)
+            const wingGeo = new THREE.BoxGeometry(2, 0.1, 1);
+            const wingMat = new THREE.MeshStandardMaterial({ color: 0x00bfff });
+            leftWing = new THREE.Mesh(wingGeo, wingMat);
+            leftWing.position.set(-1.8, 0, 0); // 往左延伸
+            spaceship.add(leftWing);
+
+            // 右襟翼
+            rightWing = new THREE.Mesh(wingGeo, wingMat);
+            rightWing.position.set(1.8, 0, 0); // 往右延伸
+            spaceship.add(rightWing);
+
+            scene.add(spaceship);
+        }
+
+        function createStarfield() {
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 1000;
+            const posArray = new Float32Array(starCount * 3);
+
+            for(let i=0; i<starCount*3; i+=3) {
+                posArray[i] = (Math.random() - 0.5) * 400;     // X
+                posArray[i+1] = (Math.random() - 0.5) * 400;   // Y
+                posArray[i+2] = (Math.random() - 0.5) * 1000;  // Z
+            }
+
+            starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            const starMat = new THREE.PointsMaterial({ size: 0.8, color: 0xffffff });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+        }
+
+        // 生成隕石或修理包
+        function spawnObject() {
+            // 決定是隕石(85%)還是修理包(15%)
+            const isItem = Math.random() < 0.15;
+            let mesh;
+
+            // 因為太空船是以圓形旋轉躲避，我們在前方 (-Z = -200) 處的某個半徑圓圈上生成障礙物
+            // 這樣玩家旋轉時就能剛好對準或躲開
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 5; // 隨機半徑範圍
+            const x = Math.sin(angle) * radius;
+            const y = Math.cos(angle) * radius;
+            const z = -200; 
+
+            if (!isItem) {
+                // 隕石
+                const geo = new THREE.DodecahedronGeometry(0.6 + Math.random()*0.8);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x8b8682, roughness: 0.9 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'asteroid', radius: 1.2, hit: false };
+            } else {
+                // 修理包 (綠色立方體)
+                const geo = new THREE.BoxGeometry(1, 1, 1);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x003300 });
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'heal', radius: 1.0, hit: false };
+            }
+
+            mesh.position.set(x, y, z);
+            // 給予隨機旋轉自轉速度
+            mesh.userData.rotX = Math.random() * 0.02;
+            mesh.userData.rotY = Math.random() * 0.02;
+
+            scene.add(mesh);
+            obstacles.push(mesh);
+        }
+
+
+        // --- 控制與陀螺儀處理 ---
+        function setupControls() {
+            // 開始按鈕點擊
+            document.getElementById('btn-start').addEventListener('click', requestOrientationPermission);
+            document.getElementById('btn-restart').addEventListener('click', restartGame);
+
+            // 油門與減速按鈕 (支援手機觸控)
+            const btnAcc = document.getElementById('btn-acc');
+            const btnDec = document.getElementById('btn-dec');
+
+            btnAcc.addEventListener('touchstart', (e) => { e.preventDefault(); speedModifier = 1.8; });
+            btnAcc.addEventListener('touchend', () => speedModifier = 1.0);
+            btnDec.addEventListener('touchstart', (e) => { e.preventDefault(); speedModifier = 0.5; });
+            btnDec.addEventListener('touchend', () => speedModifier = 1.0);
+            
+            // 電腦測試備用 (鍵盤左右鍵模擬傾斜)
+            window.addEventListener('keydown', (e) => {
+                if(e.key === 'ArrowLeft') targetRoll = Math.PI / 2; // 左傾 90 度
+                if(e.key === 'ArrowRight') targetRoll = -Math.PI / 2; // 右傾 90 度
+            });
+            window.addEventListener('keyup', (e) => {
+                if(e.key === 'ArrowLeft' || e.key === 'ArrowRight') targetRoll = 0;
+            });
+        }
+
+        // 要求 iOS/Android 陀螺儀權限
+        function requestOrientationPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ 裝置
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            startGame();
+                        } else {
+                            alert('遊戲需要陀螺儀權限才能遊玩！(現以模擬模式啟動)');
+                            startGame();
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // 一般 Android 或不支援權限宣告的瀏覽器
+                window.addEventListener('deviceorientation', handleOrientation);
+                startGame();
+            }
+        }
+
+        function handleOrientation(event) {
+            if (!gameActive) return;
+
+            // 橫屏持握時：
+            // 手機向左傾斜，飛船逆時針轉 (正 Roll)
+            // 手機向右傾斜，飛船順時針轉 (負 Roll)
+            // 橫屏下的 gamma 或 beta 會依據裝置朝向有所不同，通常標準橫屏(左轉90度)主要看 beta
+            
+            let tilt = 0;
+            // 判斷當前是否為橫屏
+            if (window.orientation === 90) {
+                tilt = event.beta; 
+            } else if (window.orientation === -90) {
+                tilt = -event.beta;
+            } else {
+                // 預設 fallback
+                tilt = event.gamma; 
+            }
+
+            // 限制傾斜角度對應 (假設傾斜 45 度時達到最大值 90 度)
+            let ratio = tilt / 45;
+            if(ratio > 1) ratio = 1;
+            if(ratio < -1) ratio = -1;
+
+            // 設定目標旋轉弧度 (最大 90度 = PI/2)
+            targetRoll = ratio * (Math.PI / 2);
+        }
+
+
+        // --- 遊戲流程控制 ---
+        function startGame() {
+            document.getElementById('start-overlay').style.display = 'none';
+            gameActive = true;
+            hp = 100;
+            gameTime = 0;
+            spawnInterval = 1000;
+            obstacles.forEach(obj => scene.remove(obj));
+            obstacles = [];
+        }
+
+        function restartGame() {
+            document.getElementById('gameover-overlay').style.display = 'none';
+            startGame();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            document.getElementById('final-score').innerText = Math.floor(gameTime);
+            
+            // 紀錄排行榜 (LocalStorage)
+            saveLeaderboard(Math.floor(gameTime));
+            showLeaderboard();
+
+            document.getElementById('gameover-overlay').style.display = 'flex';
+        }
+
+        // --- 排行榜邏輯 ---
+        function saveLeaderboard(score) {
+            let scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+            scores.push({
+                score: score,
+                date: new Date().toLocaleDateString()
+            });
+            // 降序排列
+            scores.sort((a, b) => b.score - a.score);
+            // 只取前 5 名
+            scores = scores.slice(0, 5);
+            localStorage.setItem('space_game_scores', JSON.stringify(scores));
+        }
+
+        function showLeaderboard() {
+            const scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+            const tbody = document.getElementById('leaderboard-body');
+            tbody.innerHTML = '';
+            
+            if(scores.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3">暫無資料</td></tr>`;
+                return;
+            }
+
+            scores.forEach((item, index) => {
+                const row = `<tr>
+                    <td>${index + 1}</td>
+                    <td>${item.score}</td>
+                    <td>${item.date}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+
+        // --- 核心遊戲迴圈與物理碰撞 ---
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000; // 秒數差
+            lastTime = now;
+
+            if (gameActive) {
+                gameTime += delta;
+                document.getElementById('hud-score').innerText = `分數 (時間): ${Math.floor(gameTime)}s`;
+
+                // 隨時間增加難度 (縮短生成間隔，最低每 200ms 一個)
+                spawnInterval = Math.max(200, 1000 - (gameTime * 10));
+
+                // 1. 平滑內插飛船旋轉 (增加操作流暢感)
+                currentRoll += (targetRoll - currentRoll) * 0.1;
+                spaceship.rotation.z = currentRoll;
+
+                // 2. 隨前進速度移動星空背景 (營造前進感)
+                const currentSpeed = baseSpeed * speedModifier;
+                document.getElementById('hud-speed').innerText = `速度: ${Math.round(currentSpeed)}`;
+                
+                starField.position.z += currentSpeed * delta;
+                if (starField.position.z > 400) starField.position.z = 0;
+
+                // 3. 處理障礙物生成
+                spawnTimer += delta * 1000;
+                if (spawnTimer >= spawnInterval) {
+                    spawnObject();
+                    spawnTimer = 0;
+                }
+
+                // 4. 移動障礙物與碰撞偵測
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    const obj = obstacles[i];
+                    obj.position.z += currentSpeed * delta; // 障礙物往飛船迎面而來 (+Z)
+
+                    // 自轉
+                    obj.rotation.x += obj.userData.rotX;
+                    obj.rotation.y += obj.userData.rotY;
+
+                    // 碰撞偵測 (當障礙物到達飛船的 Z 軸範圍時，大約 Z = 0 附近)
+                    if (!obj.userData.hit && obj.position.z >= -1 && obj.position.z <= 1) {
+                        
+                        // 獲取左右襟翼的世界座標來進行精準襟翼碰撞
+                        const leftWingWorld = new THREE.Vector3();
+                        const rightWingWorld = new THREE.Vector3();
+                        leftWing.getWorldPosition(leftWingWorld);
+                        rightWing.getWorldPosition(rightWingWorld);
+
+                        // 計算障礙物到左、右襟翼的距離
+                        const distToLeft = obj.position.distanceTo(leftWingWorld);
+                        const distToRight = obj.position.distanceTo(rightWingWorld);
+
+                        // 只要其中一個襟翼進入障礙物碰撞半徑
+                        if (distToLeft < obj.userData.radius || distToRight < obj.userData.radius) {
+                            obj.userData.hit = true;
+
+                            if (obj.userData.type === 'asteroid') {
+                                // 撞到隕石扣血
+                                hp -= 25;
+                                if (hp < 0) hp = 0;
+                                document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                // 閃爍紅光特效提示
+                                flashScreen('#ff0000');
+                                
+                                if (hp <= 0) {
+                                    gameOver();
+                                }
+                            } else if (obj.userData.type === 'heal') {
+                                // 吃到修理包補血
+                                hp = Math.min(100, hp + 20);
+                                document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                flashScreen('#00ff00');
+                            }
+
+                            // 碰撞後移除物體
+                            scene.remove(obj);
+                            obstacles.splice(i, 1);
+                            continue;
+                        }
+                    }
+
+                    // 超過飛船後方則安全移除
+                    if (obj.position.z > 20) {
+                        scene.remove(obj);
+                        obstacles.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // 受傷或補血時的畫面閃爍視覺反饋
+        function flashScreen(color) {
+            renderer.setClearColor(new THREE.Color(color));
+            setTimeout(() => {
+                renderer.setClearColor(0x000000);
+            }, 100);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
