@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (全設備通殺版)</title>
+    <title>太空飛船：隕城危機 3D (大爆炸特效版)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -112,19 +112,19 @@
         .overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
+            background: rgba(5, 5, 15, 0.95);
             display: flex;
             justify-content: center;
             align-items: center;
             color: white;
-            z-index: 100;
-            pointer-events: auto; /* 開啟全域點擊事件 */
+            z-index: 9999;
+            pointer-events: auto !important;
         }
         .menu-card {
-            background: rgba(30, 30, 40, 0.9);
+            background: rgba(30, 30, 40, 0.95);
             border: 2px solid #444;
             border-radius: 10px;
-            padding: 20px 40px;
+            padding: 25px 40px;
             text-align: center;
             max-width: 500px;
             width: 90%;
@@ -132,16 +132,14 @@
         }
         .menu-card h1 { margin-top: 0; color: #00bfff; }
         
-        /* 進入太空按鈕 */
         .start-btn {
             background: #00bfff; border: none; color: white;
-            padding: 12px 30px; font-size: 18px; font-weight: bold;
+            padding: 14px 40px; font-size: 20px; font-weight: bold;
             border-radius: 5px; cursor: pointer; margin-top: 15px;
             display: inline-block;
-            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 10px rgba(0, 191, 255, 0.4);
         }
-        .start-btn:hover { background: #0099cc; transform: scale(1.05); }
-        .start-btn:active { transform: scale(0.95); }
+        .start-btn:hover { background: #0099cc; }
 
         .leaderboard-table {
             width: 100%;
@@ -178,13 +176,13 @@
     <div id="start-overlay" class="overlay">
         <div class="menu-card">
             <h1>太空飛船：隕城危機 3D</h1>
-            <p style="text-align: left; font-size: 14px; line-height: 1.6;">
+            <p style="text-align: left; font-size: 14px; line-height: 1.6; color:#ccc; margin-bottom: 10px;">
                1. 左手【圓圈搖桿】：任意方向滑動進行精確 360 度位移控制。<br>
                2. 【雙模翻轉】：支援手機陀螺儀。若無感應器，飛船會隨移動自動翻轉。<br>
                3. 右手【紅色按鈕】：發射雷射。電腦上支援 <strong>Enter</strong> 或 <strong>空白鍵</strong>，或按 <strong>WASD/方向鍵</strong> 移動。<br>
-               4. 穿過藍色<strong>「宇宙圈」</strong>可獲得 <strong>+100分</strong>！
+               4. <strong>【視覺大升級】</strong>：大幅增加爆炸粒子數量與散射範圍，打擊感全面爆發！
             </p>
-            <button class="start-btn" onclick="requestOrientationPermission()">進入太空</button>
+            <button class="start-btn" id="real-start-btn">進入太空</button>
         </div>
     </div>
 
@@ -199,7 +197,7 @@
                 </thead>
                 <tbody id="leaderboard-body"></tbody>
             </table>
-            <button class="start-btn" style="background:#ff4d4d;" onclick="restartGame()">再試一次</button>
+            <button class="start-btn" id="real-restart-btn" style="background:#ff4d4d; box-shadow: 0 4px 10px rgba(255, 77, 77, 0.4);">再試一次</button>
         </div>
     </div>
 
@@ -216,7 +214,7 @@
         let score = 0; 
         let gameTime = 0;
         let spawnTimer = 0;
-        let spawnInterval = 1000; 
+        let spawnInterval = 666; 
         
         let moveSpeed = 15; 
         let boundsX = 12;
@@ -230,16 +228,16 @@
         const inputState = { up: false, down: false, left: false, right: false };
 
         window.onload = function() {
-            init();
+            init3D();
         };
 
-        function init() {
+        function init3D() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x020208); 
             scene.fog = new THREE.FogExp2(0x020208, 0.01);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 4, 10); 
+            camera.position.set(0, 5, 12); 
             camera.lookAt(0, 0, -5);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -263,33 +261,34 @@
 
         function updateScreenBounds() {
             if (!camera) return;
-            const distance = 10; 
+            const distance = 12; 
             const vFOV = THREE.MathUtils.degToRad(camera.fov); 
             const visibleHeight = 2 * Math.tan(vFOV / 2) * distance;
             const visibleWidth = visibleHeight * camera.aspect;
             
-            boundsX = (visibleWidth / 2) - 2.0; 
-            boundsY = (visibleHeight / 2) - 1.2; 
+            boundsX = (visibleWidth / 2) - 2.8; 
+            boundsY = (visibleHeight / 2) - 1.8; 
             boundsY -= 0.5; 
         }
 
         function createSpaceship() {
             spaceship = new THREE.Group();
 
-            const bodyGeo = new THREE.ConeGeometry(0.6, 3, 16);
+            const bodyGeo = new THREE.ConeGeometry(0.9, 4.5, 16);
             bodyGeo.rotateX(Math.PI / 2); 
             const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.5, roughness: 0.2 });
             const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
             spaceship.add(bodyMesh);
 
-            const wingGeo = new THREE.BoxGeometry(2.2, 0.15, 0.8);
+            const wingGeo = new THREE.BoxGeometry(3.3, 0.22, 1.2);
             const wingMat = new THREE.MeshStandardMaterial({ color: 0x00bfff, roughness: 0.5 });
+            
             leftWing = new THREE.Mesh(wingGeo, wingMat);
-            leftWing.position.set(-1.6, 0, 0); 
+            leftWing.position.set(-2.4, 0, 0); 
             spaceship.add(leftWing);
 
             rightWing = new THREE.Mesh(wingGeo, wingMat);
-            rightWing.position.set(1.6, 0, 0); 
+            rightWing.position.set(2.4, 0, 0); 
             spaceship.add(rightWing);
 
             spaceship.position.set(0, 0, 0);
@@ -333,10 +332,10 @@
                     hit: false 
                 };
             } else if (rand < 0.85) {
-                const geo = new THREE.BoxGeometry(1.3, 1.3, 1.3);
+                const geo = new THREE.BoxGeometry(2.6, 2.6, 2.6);
                 const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00 });
                 mesh = new THREE.Mesh(geo, mat);
-                mesh.userData = { type: 'heal', radius: 1.3, hit: false };
+                mesh.userData = { type: 'heal', radius: 2.6, hit: false };
             } else {
                 const geo = new THREE.TorusGeometry(1.8, 0.15, 8, 24);
                 const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x003366 });
@@ -352,7 +351,11 @@
             obstacles.push(mesh);
         }
 
+        // --- 核心優化：更威猛的大爆炸粒子特效系統 ---
         function createExplosion(position, colorHex, particleCount = 30) {
+            // 所有傳入的基礎數量直接翻倍，獲得更密集的彈幕煙火感
+            particleCount = particleCount * 2; 
+
             const geo = new THREE.BufferGeometry();
             const posArray = new Float32Array(particleCount * 3);
             const velocities = [];
@@ -364,7 +367,9 @@
 
                 const angle1 = Math.random() * Math.PI * 2;
                 const angle2 = Math.random() * Math.PI;
-                const speed = 5 + Math.random() * 12;
+                
+                // 【修改點】加大初始推力速度範圍 (原本 5~17 -> 大幅加強至 12~35) 讓碎片飛得更快更遠
+                const speed = 12 + Math.random() * 23;
 
                 velocities.push(new THREE.Vector3(
                     Math.sin(angle2) * Math.cos(angle1) * speed,
@@ -374,8 +379,9 @@
             }
 
             geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            
             const mat = new THREE.PointsMaterial({
-                size: 0.5,
+                size: 0.6, // 微幅放大粒子尺寸提升顆粒感
                 color: colorHex,
                 transparent: true,
                 opacity: 1.0,
@@ -383,7 +389,14 @@
             });
 
             const particleSystem = new THREE.Points(geo, mat);
-            particleSystem.userData = { velocities: velocities, age: 0, maxAge: 0.6 };
+            
+            // 【修改點】生命週期從 0.6秒 延長至 0.9秒，使巨量碎片的擴散軌跡更清晰完整
+            particleSystem.userData = { 
+                velocities: velocities, 
+                age: 0, 
+                maxAge: 0.9 
+            };
+
             scene.add(particleSystem);
             particlesSystems.push(particleSystem);
         }
@@ -423,6 +436,7 @@
                     deltaY = (deltaY / distance) * maxRadius;
                 }
                 handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                
                 joystickVector.x = deltaX / maxRadius;
                 joystickVector.y = -(deltaY / maxRadius);
             }
@@ -436,10 +450,10 @@
 
             base.addEventListener('touchstart', (e) => {
                 isDragging = true;
-                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                if(e.touches ? e.touches[0] : false) handleMove(e.touches[0].clientX, e.touches[0].clientY);
             });
             window.addEventListener('touchmove', (e) => {
-                if (isDragging) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                if (isDragging && (e.touches ? e.touches[0] : false)) handleMove(e.touches[0].clientX, e.touches[0].clientY);
             });
             window.addEventListener('touchend', handleEnd);
 
@@ -456,14 +470,21 @@
         function setupControls() {
             initJoystick();
 
+            document.getElementById('real-start-btn').onclick = function() {
+                forceUnlockAndStart();
+            };
+            document.getElementById('real-restart-btn').onclick = function() {
+                restartGame();
+            };
+
             const btnFire = document.getElementById('btn-fire');
-            btnFire.addEventListener('touchstart', (e) => { e.preventDefault(); fireProjectile(); });
-            btnFire.addEventListener('mousedown', () => fireProjectile());
+            btnFire.onmousedown = function() { fireProjectile(); };
+            btnFire.ontouchstart = function(e) { fireProjectile(); };
             
             window.addEventListener('mousemove', (e) => {
                 if(!gameActive || hasGyro) return; 
                 let ratio = (e.clientX / window.innerWidth) * 2 - 1; 
-                targetRoll = -ratio * (Math.PI / 2); 
+                targetRoll = ratio * (Math.PI / 2); 
             });
 
             window.addEventListener('keydown', (e) => {
@@ -472,7 +493,6 @@
                 if(e.key === 'ArrowLeft' || e.key === 'a') inputState.left = true;
                 if(e.key === 'ArrowRight' || e.key === 'd') inputState.right = true;
                 if(e.key === ' ' || e.key === 'f' || e.key === 'Enter') {
-                    e.preventDefault(); 
                     fireProjectile();
                 }
             });
@@ -484,8 +504,8 @@
             });
         }
 
-        // 全設備安全解鎖器（直接在 HTML 被 click 呼叫，不依賴 JS 監聽）
-        function requestOrientationPermission() {
+        function forceUnlockAndStart() {
+            startGame(); 
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission()
@@ -493,32 +513,28 @@
                             if (permissionState === 'granted') {
                                 window.addEventListener('deviceorientation', handleOrientation);
                             }
-                            startGame();
-                        })
-                        .catch(() => { startGame(); });
+                        }).catch(()=>{});
                 } else {
                     window.addEventListener('deviceorientation', handleOrientation);
-                    startGame();
                 }
-            } catch (e) {
-                startGame();
-            }
+            } catch (e) {}
         }
 
         function handleOrientation(event) {
-            if (!gameActive) return;
-            if (event && (event.beta !== null || event.gamma !== null)) {
+            if (!gameActive || !event) return;
+            if (event.beta !== null || event.gamma !== null) {
                 hasGyro = true; 
             } else {
                 return;
             }
-            let tilt = 0;
-            if (window.orientation === 90) { tilt = event.beta; } 
-            else if (window.orientation === -90) { tilt = -event.beta; } 
-            else { tilt = event.gamma; }
+            
+            let isLandscape = window.innerWidth > window.innerHeight;
+            let tilt = isLandscape ? event.beta : event.gamma;
+            
             let ratio = tilt / 45;
             if(ratio > 1) ratio = 1; if(ratio < -1) ratio = -1;
-            targetRoll = ratio * (Math.PI / 2);
+            
+            targetRoll = -ratio * (Math.PI / 2);
         }
 
         function startGame() {
@@ -526,7 +542,7 @@
             window.focus(); 
             
             gameActive = true;
-            hp = 100; score = 0; gameTime = 0; spawnTimer = 0; spawnInterval = 1000;
+            hp = 100; score = 0; gameTime = 0; spawnTimer = 0; spawnInterval = 666;
             document.getElementById('hud-hp').innerText = `HP: ${hp}`;
             document.getElementById('hud-score').innerText = `分數: ${score}`;
             
@@ -537,7 +553,7 @@
             particlesSystems.forEach(obj => scene.remove(obj));
             particlesSystems = [];
             
-            spaceship.position.set(0, 0, 0);
+            if(spaceship) spaceship.position.set(0, 0, 0);
             joystickVector.x = 0; joystickVector.y = 0;
             targetRoll = 0; currentRoll = 0;
             spawnObject();
@@ -557,24 +573,29 @@
         }
 
         function saveLeaderboard(finalScore) {
-            let scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
-            scores.push({ score: finalScore, date: new Date().toLocaleDateString() });
-            scores.sort((a, b) => b.score - a.score);
-            scores = scores.slice(0, 5);
-            localStorage.setItem('space_game_scores', JSON.stringify(scores));
+            try {
+                let scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+                scores.push({ score: finalScore, date: new Date().toLocaleDateString() });
+                scores.sort((a, b) => b.score - a.score);
+                scores = scores.slice(0, 5);
+                localStorage.setItem('space_game_scores', JSON.stringify(scores));
+            } catch(e){}
         }
 
         function showLeaderboard() {
-            const scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
-            const tbody = document.getElementById('leaderboard-body');
-            tbody.innerHTML = '';
-            if(scores.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3">暫無資料</td></tr>`;
-                return;
-            }
-            scores.forEach((item, index) => {
-                tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.score}</td><td>${item.date}</td></tr>`;
-            });
+            try {
+                const scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+                const tbody = document.getElementById('leaderboard-body');
+                if(!tbody) return;
+                tbody.innerHTML = '';
+                if(scores.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3">暫無資料</td></tr>`;
+                    return;
+                }
+                scores.forEach((item, index) => {
+                    tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.score}</td><td>${item.date}</td></tr>`;
+                });
+            } catch(e){}
         }
 
         let lastTime = performance.now();
@@ -596,29 +617,33 @@
 
                 if (inputState.up) moveY += 1;
                 if (inputState.down) moveY -= 1;
-                if (inputState.left) moveX -= 1;
+                if (inputState.left) moveX -= 1; 
                 if (inputState.right) moveX += 1;
 
                 const vectorLen = Math.sqrt(moveX * moveX + moveY * moveY);
                 if (vectorLen > 1) { moveX /= vectorLen; moveY /= vectorLen; }
 
-                spaceship.position.x += moveX * moveSpeed * delta;
-                spaceship.position.y += moveY * moveSpeed * delta;
-                spaceship.position.x = Math.max(-boundsX, Math.min(boundsX, spaceship.position.x));
-                spaceship.position.y = Math.max(-boundsY, Math.min(boundsY, spaceship.position.y));
+                if(spaceship) {
+                    spaceship.position.x += moveX * moveSpeed * delta;
+                    spaceship.position.y += moveY * moveSpeed * delta;
+                    spaceship.position.x = Math.max(-boundsX, Math.min(boundsX, spaceship.position.x));
+                    spaceship.position.y = Math.max(-boundsY, Math.min(boundsY, spaceship.position.y));
 
-                if (!hasGyro) {
-                    if (moveX !== 0) { targetRoll = -moveX * (Math.PI / 3); } 
-                    else { targetRoll *= 0.9; }
+                    if (!hasGyro) {
+                        if (moveX !== 0) { targetRoll = moveX * (Math.PI / 3); } 
+                        else { targetRoll *= 0.9; }
+                    }
+
+                    currentRoll += (targetRoll - currentRoll) * 0.12;
+                    spaceship.rotation.z = currentRoll;
+                    spaceship.rotation.y = -currentRoll * 0.2; 
                 }
 
-                currentRoll += (targetRoll - currentRoll) * 0.12;
-                spaceship.rotation.z = currentRoll;
-                spaceship.rotation.y = currentRoll * 0.2; 
-
-                spawnInterval = Math.max(200, 1000 - (gameTime * 15));
-                starField.position.z += baseSpeed * delta;
-                if (starField.position.z > 200) starField.position.z = 0;
+                spawnInterval = Math.max(150, 666 - (gameTime * 15));
+                if(starField) {
+                    starField.position.z += baseSpeed * delta;
+                    if (starField.position.z > 200) starField.position.z = 0;
+                }
 
                 spawnTimer += delta * 1000;
                 if (spawnTimer >= spawnInterval) { spawnObject(); spawnTimer = 0; }
@@ -636,9 +661,9 @@
                             const dist = projectile.position.distanceTo(obstacle.position);
                             if (dist < obstacle.userData.radius) {
                                 obstacle.userData.hit = true;
-                                let pCount = 20;
-                                if (obstacle.userData.sizeType === 'large') pCount = 55;
-                                if (obstacle.userData.sizeType === 'small') pCount = 12;
+                                let pCount = 30; // 基礎散射量提高
+                                if (obstacle.userData.sizeType === 'large') pCount = 65;
+                                if (obstacle.userData.sizeType === 'small') pCount = 18;
                                 createExplosion(obstacle.position, 0xd2691e, pCount);
                                 scene.remove(obstacle); obstacles.splice(j, 1);
                                 scene.remove(projectile); projectiles.splice(i, 1);
@@ -664,24 +689,23 @@
                         const distToRight = obj.position.distanceTo(rightWingWorld);
                         const distToBody = obj.position.distanceTo(spaceship.position);
 
-                        if (distToLeft < obj.userData.radius || distToRight < obj.userData.radius || distToBody < obj.userData.radius * 0.7) {
+                        if (distToLeft < obj.userData.radius || distToRight < obj.userData.radius || distToBody < obj.userData.radius * 1.1) {
                             obj.userData.hit = true;
                             if (obj.userData.type === 'asteroid') {
                                 hp -= 25; if (hp < 0) hp = 0;
                                 document.getElementById('hud-hp').innerText = `HP: ${hp}`;
                                 flashScreen('#ff3333');
-                                createExplosion(obj.position, 0xff0000, 20);
+                                createExplosion(obj.position, 0xff0000, 30);
                                 if (hp <= 0) gameOver();
                             } else if (obj.userData.type === 'heal') {
                                 hp = Math.min(100, hp + 20);
                                 document.getElementById('hud-hp').innerText = `HP: ${hp}`;
                                 flashScreen('#33ff33');
-                                createExplosion(obj.position, 0x00ff00, 40);
+                                createExplosion(obj.position, 0x00ff00, 60); // 超大修復包粒子
                             } else if (obj.userData.type === 'ring') {
                                 score += 100;
-                                document.getElementById('hud-score').innerText = `分數: ${Math.floor(score)}`;
                                 flashScreen('#00ffff');
-                                createExplosion(obj.position, 0x00ffff, 25);
+                                createExplosion(obj.position, 0x00ffff, 40);
                             }
                             scene.remove(obj); obstacles.splice(i, 1); continue;
                         }
@@ -690,7 +714,7 @@
                 }
             }
 
-            // 粒子更新
+            // 粒子更新 (擴散與淡出)
             for (let i = particlesSystems.length - 1; i >= 0; i--) {
                 const sys = particlesSystems[i];
                 sys.userData.age += delta;
@@ -699,29 +723,36 @@
                 for (let j = 0; j < vels.length; j++) {
                     posAttr.array[j * 3] += vels[j].x * delta;
                     posAttr.array[j * 3 + 1] += vels[j].y * delta;
+                    posAttr.array[j * 3 + 2] * delta; // 配合高速擴散調整 Z 軸
                     posAttr.array[j * 3 + 2] += vels[j].z * delta;
                 }
                 posAttr.needsUpdate = true;
+                
                 const lifeRatio = sys.userData.age / sys.userData.maxAge;
                 sys.material.opacity = 1.0 - lifeRatio;
-                sys.material.size = 0.5 * (1.0 - lifeRatio * 0.5);
+                sys.material.size = 0.6 * (1.0 - lifeRatio * 0.4); // 粒子隨擴散慢慢微縮縮小
+
                 if (sys.userData.age >= sys.userData.maxAge) {
                     scene.remove(sys); sys.geometry.dispose(); sys.material.dispose(); particlesSystems.splice(i, 1);
                 }
             }
-            renderer.render(scene, camera);
+            if(renderer && scene && camera) renderer.render(scene, camera);
         }
 
         function flashScreen(color) {
-            scene.background = new THREE.Color(color);
-            setTimeout(() => { if(scene) scene.background = new THREE.Color(0x020208); }, 120);
+            if(scene) {
+                scene.background = new THREE.Color(color);
+                setTimeout(() => { if(scene) scene.background = new THREE.Color(0x020208); }, 120);
+            }
         }
 
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            updateScreenBounds();
+            if(camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                updateScreenBounds();
+            }
         }
     </script>
 </body>
