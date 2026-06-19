@@ -2,9 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <!-- 確保網頁在手機上不會被使用者雙指放大，且完美滿版（涵蓋劉海屏區域） -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (翻滾方向完美修正版)</title>
+    <title>太空飛船：隕城危機 3D (操作與陀螺儀最終校正版)</title>
     <style>
         /* 基礎全域重設：移除邊距，並禁止內容被滑鼠或手指選取 */
         * {
@@ -70,7 +69,6 @@
             border-radius: 50%; position: absolute;
             cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.3);
         }
-        /* 當點擊搖桿時，小圓圈顏色加深 */
         .joystick-base:active .joystick-handle { background: rgba(255, 255, 255, 0.6); }
 
         /* 右側發射武器按鈕 (紅色圓圈) */
@@ -113,17 +111,13 @@
         .leaderboard-table th, .leaderboard-table td { border-bottom: 1px solid #444; padding: 6px; font-size: 14px; }
         .leaderboard-table th { color: #00bfff; }
     </style>
-    <!-- 引入開源且穩定的 3D WebGL 函數庫 Three.js (r128版本) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <!-- 提示旋轉螢幕的 UI -->
     <div id="portrait-warning">請將手機旋轉為【橫屏】進行遊戲 🔄</div>
-    <!-- 放置 3D 渲染成果的容器 -->
     <div id="canvas-container"></div>
 
-    <!-- 遊戲中即時 HUD 與虛擬按鈕 -->
     <div class="ui-layer">
         <div class="hud">
             <div id="hud-hp">HP: 100</div>
@@ -137,21 +131,19 @@
         </div>
     </div>
 
-    <!-- 遊戲初始引導畫面 -->
     <div id="start-overlay" class="overlay">
         <div class="menu-card">
             <h1>太空飛船：隕城危機 3D</h1>
             <p style="text-align: left; font-size: 14px; line-height: 1.6; color:#ccc; margin-bottom: 10px;">
                1. 左手【圓圈搖桿】：在圓圈內任意滑動，進行精確 360 度位移控制。<br>
-               2. 【雙模翻轉】：支援手機陀螺儀。若設備無感應器，飛船會隨左右位移方向自動翻轉傾斜。<br>
-               3. 右手【紅色按鈕】：發射雷射。電腦上遊玩可直接按 <strong>Enter</strong> 或 <strong>空白鍵</strong>，按 <strong>WASD/方向鍵</strong> 移動。<br>
-               4. 穿過藍色<strong>「宇宙圈」</strong>可獲得 <strong>+100分</strong>！
+               2. 【雙模翻轉】：支援手機陀螺儀。<strong>手機向左傾斜時，機體會精確逆時針翻滾</strong>，反之亦然。<br>
+               3. 右手【紅色按鈕】：發射雷射。電腦上遊玩精確支援 <strong>滑鼠左鍵點擊開火</strong>，或按鍵盤 <strong>Enter/空白鍵</strong> 發射。<br>
+               4. 穿過藍色<strong>「宇宙圈」</strong>可獲得 <strong>+100分</strong>！綠色方塊是<strong>「修理包」</strong>可以恢復機體生命值！
             </p>
             <button class="start-btn" id="real-start-btn">進入太空</button>
         </div>
     </div>
 
-    <!-- 遊戲結束與本地排行榜紀錄畫面 -->
     <div id="gameover-overlay" class="overlay" style="display: none;">
         <div class="menu-card">
             <h1 style="color: #ff4d4d;">GAME OVER</h1>
@@ -169,157 +161,133 @@
 
     <script>
         // --- 核心 3D 引擎與物件全域變數 ---
-        let scene, camera, renderer;         // Three.js 核心三要素：場景、相機、WebGL渲染器
-        let spaceship, leftWing, rightWing;  // 玩家飛船的群組物件、以及左右襟翼子物件
-        let starField;                       // 背景星空粒子群組
-        let obstacles = [];                  // 存放在畫面中前進的所有物件（隕石、修復包、宇宙圈）
-        let particlesSystems = [];           // 存放所有正在進行擴散與淡出動畫的爆炸粒子系統
-        let gameActive = false;              // 遊戲進行狀態開關
+        let scene, camera, renderer;         
+        let spaceship, leftWing, rightWing;  
+        let starField;                       
+        let obstacles = [];                  
+        let particlesSystems = [];           
+        let gameActive = false;              
         
         // --- 遊戲物理與機制平衡變數 ---
-        let hp = 100;                        // 玩家初始健康值
-        let baseSpeed = 45;                  // 宇宙萬物朝飛船迎面飛來的基礎前進速度
-        let score = 0;                       // 玩家總得分
-        let gameTime = 0;                    // 當前關卡存活時間
-        let spawnTimer = 0;                  // 物件生成計時器 (單位: 毫秒)
-        let spawnInterval = 666;             // 初始每 666 毫秒隨機在遠方產生一個物件 (頻率已提高50%)
+        let hp = 100;                        
+        let baseSpeed = 45;                  
+        let score = 0;                       
+        let gameTime = 0;                    
+        let spawnTimer = 0;                  
+        let spawnInterval = 666;             
         
-        let moveSpeed = 15;                  // 飛船上下左右平移的移動速度速率
-        let boundsX = 12;                    // 飛船左右平移的動態安全物理邊界（避免飛出螢幕）
-        let boundsY = 7;                     // 飛船上下平移的動態安全物理邊界
+        let moveSpeed = 15;                  
+        let boundsX = 12;                    
+        let boundsY = 7;
 
         // --- 角度與感應器狀態變數 ---
-        let targetRoll = 0;                  // 飛船預期達到的目標旋轉角度 (單位: 弧度)
-        let currentRoll = 0;                 // 飛船當下渲染出來的實際旋轉角度 (用於實現平滑內插)
-        let hasGyro = false;                 // 標記當前設備是否含有且成功啟用手機陀螺儀感應器
+        let targetRoll = 0;                  
+        let currentRoll = 0;                 
+        let hasGyro = false;                 
 
         // --- 玩家輸入物理向量狀態 ---
-        let joystickVector = { x: 0, y: 0 }; // 儲存虛擬搖桿回傳的正規化位移量 (-1.0 到 1.0)
-        const inputState = { up: false, down: false, left: false, right: false }; // 儲存鍵盤按鍵觸發狀態
+        let joystickVector = { x: 0, y: 0 }; 
+        const inputState = { up: false, down: false, left: false, right: false }; 
 
-        // 當網頁載入完成，立刻啟動初始化程式
         window.onload = function() {
             init3D();
         };
 
-        // 初始化 Three.js 3D 視界環境
         function init3D() {
-            // 建立 3D 場景空間
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020208); // 設定深藍黑色的深邃太色底色
-            scene.fog = new THREE.FogExp2(0x020208, 0.01); // 加上太空霧氣，讓遠處生成的物體有隱約浮現的透視感
+            scene.background = new THREE.Color(0x020208); 
+            scene.fog = new THREE.FogExp2(0x020208, 0.01);
 
-            // 建立第三人稱追尾視野相機 (視角60度，螢幕寬高比，近剪裁面0.1，遠剪裁面1000)
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 12); // 將相機安置在飛船 (0,0,0) 的後方 12 單位、上方 5 單位的第三人稱最佳觀測點
-            camera.lookAt(0, 0, -5); // 讓相機聚焦直視前方
+            camera.position.set(0, 5, 12); 
+            camera.lookAt(0, 0, -5);
 
-            // 建立 WebGL 渲染器，開啟消除鋸齒 (Antialias)
             renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight); // 設定畫布輸出尺寸為滿版
-            document.getElementById('canvas-container').appendChild(renderer.domElement); // 將渲染出來的 Canvas 畫布插入網頁標籤
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+            document.getElementById('canvas-container').appendChild(renderer.domElement); 
 
-            // 加上全域環境光，提供基礎的微弱亮度
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             
-            // 加上帶有方向的太陽平行光，照亮 3D 模型立體面，產生陰影與金屬反光層次
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
             dirLight.position.set(5, 15, 10);
             scene.add(dirLight);
 
-            // 呼叫模組函數：建立背景星海、建立玩家太空船、計算動態螢幕可視邊界
             createStarfield();
             createSpaceship();
             updateScreenBounds();
 
-            // 綁定視窗縮放監聽與 UI 控制元件
             window.addEventListener('resize', onWindowResize);
             setupControls();
-            
-            // 啟動 3D 渲染主迴圈 (Render Loop)
             animate();
         }
 
-        // 根據相機視野(FOV)與距離，自動計算出飛船在 Z=0 處絕對不會飛出螢幕外的邊界範圍
         function updateScreenBounds() {
             if (!camera) return;
-            const distance = 12; // 飛船在 Z=0，相機在 Z=12，兩者距離為 12 單位
-            const vFOV = THREE.MathUtils.degToRad(camera.fov); // 將相機垂直視野夾角從角度轉換成弧度
-            const visibleHeight = 2 * Math.tan(vFOV / 2) * distance; // 利用三角函數公式計算此距離下可見的高度
-            const visibleWidth = visibleHeight * camera.aspect; // 高度乘以相機寬高比(Aspect)得到可見寬度
+            const distance = 12; 
+            const vFOV = THREE.MathUtils.degToRad(camera.fov); 
+            const visibleHeight = 2 * Math.tan(vFOV / 2) * distance; 
+            const visibleWidth = visibleHeight * camera.aspect; 
             
-            // 扣掉機身和襟翼展開的半徑大小，確保兩側邊緣 100% 留在畫面內
             boundsX = (visibleWidth / 2) - 2.8; 
             boundsY = (visibleHeight / 2) - 1.8; 
-            boundsY -= 0.5; // 因相機朝前下方傾視，微調下邊緣安全係數
+            boundsY -= 0.5; 
         }
 
-        // 建立加大了 50% 的 3D 太空船複合群組物件
         function createSpaceship() {
-            spaceship = new THREE.Group(); // 建立一個空的 Group 節點作為母體，方便同步控制平移與旋轉
+            spaceship = new THREE.Group(); 
 
-            // 1. 建立亮黃色圓錐機身 (底半徑 0.9, 長度 4.5, 圓周分段 16)
             const bodyGeo = new THREE.ConeGeometry(0.9, 4.5, 16);
-            bodyGeo.rotateX(Math.PI / 2); // 圓錐幾何體預設朝上，將其沿 X 軸轉 90 度使其朝向前方 (-Z軸)
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.5, roughness: 0.2 }); // 金屬亮黃外殼材質
+            bodyGeo.rotateX(Math.PI / 2); 
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.5, roughness: 0.2 }); 
             const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-            spaceship.add(bodyMesh); // 裝入主群組
+            spaceship.add(bodyMesh); 
 
-            // 2. 建立藍色展開型大襟翼 (寬 3.3, 高 0.22, 縱深 1.2)
             const wingGeo = new THREE.BoxGeometry(3.3, 0.22, 1.2);
             const wingMat = new THREE.MeshStandardMaterial({ color: 0x00bfff, roughness: 0.5 });
             
-            // 左襟翼：往左側平移 2.4 單位安裝
             leftWing = new THREE.Mesh(wingGeo, wingMat);
             leftWing.position.set(-2.4, 0, 0); 
             spaceship.add(leftWing);
 
-            // 右襟翼：往右側平移 2.4 單位安裝
             rightWing = new THREE.Mesh(wingGeo, wingMat);
             rightWing.position.set(2.4, 0, 0); 
             spaceship.add(rightWing);
 
-            // 設定飛船初始座標在世界原點，並加入 3D 場景中
             spaceship.position.set(0, 0, 0);
             scene.add(spaceship);
         }
 
-        // 使用 BufferGeometry 高效能粒子型態建立流動星空背景
         function createStarfield() {
-            const starGeo = new THREE.BufferGeometry(); // 建立頂點快取幾何體
-            const starCount = 800; // 產生 800 個星星
-            const posArray = new Float32Array(starCount * 3); // 每個星星由 X, Y, Z 三個浮點數構成
+            const starGeo = new THREE.BufferGeometry(); 
+            const starCount = 800; 
+            const posArray = new Float32Array(starCount * 3); 
 
             for(let i=0; i<starCount*3; i+=3) {
-                posArray[i] = (Math.random() - 0.5) * 300;     // 隨機發散分佈 X 座標
-                posArray[i+1] = (Math.random() - 0.5) * 200;   // 隨機分佈 Y 座標
-                posArray[i+2] = (Math.random() - 0.5) * 400 - 200; // 分佈在前方 Z 軸 -400 到 0 之間的長廊中
+                posArray[i] = (Math.random() - 0.5) * 300;     
+                posArray[i+1] = (Math.random() - 0.5) * 200;   
+                posArray[i+2] = (Math.random() - 0.5) * 400 - 200; 
             }
 
-            starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3)); // 將數組綁定為幾何體的座標屬性
-            const starMat = new THREE.PointsMaterial({ size: 0.6, color: 0xffffff }); // 建立白色圓點粒子材質
-            starField = new THREE.Points(starGeo, starMat); // 建立粒子群
-            scene.add(starField); // 加到場景
+            starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3)); 
+            const starMat = new THREE.PointsMaterial({ size: 0.6, color: 0xffffff }); 
+            starField = new THREE.Points(starGeo, starMat); 
+            scene.add(starField); 
         }
 
-        // 動態隨機生成隕石、大修理包或宇宙圈
         function spawnObject() {
-            const rand = Math.random(); // 取一個 0 到 1 之間的隨機數
+            const rand = Math.random(); 
             let mesh;
             
-            // 在遠方 Z = -90 處的寬大長方形視野範圍內隨機投射生成座標
             const x = (Math.random() - 0.5) * (boundsX * 4);  
             const y = (Math.random() - 0.5) * (boundsY * 4);  
             const z = -90; 
 
             if (rand < 0.70) {
-                // 70% 機率生成：大小隨機、多面體形狀的不規則隕石 (半徑從 0.4 到 2.5 隨機)
                 const sizeScale = 0.4 + Math.random() * 2.1; 
-                const geo = new THREE.DodecahedronGeometry(sizeScale); // 十二面不規則體
-                const mat = new THREE.MeshStandardMaterial({ color: 0xcd853f, roughness: 0.9 }); // 粗糙岩石材質
+                const geo = new THREE.DodecahedronGeometry(sizeScale); 
+                const mat = new THREE.MeshStandardMaterial({ color: 0xcd853f, roughness: 0.9 }); 
                 mesh = new THREE.Mesh(geo, mat);
-                // 儲存該隕石的自訂屬性：碰撞半徑隨縮放正比加大，並記錄大小分類提供後續大爆炸粒子數判斷
                 mesh.userData = { 
                     type: 'asteroid', 
                     radius: sizeScale * 1.2, 
@@ -327,46 +295,40 @@
                     hit: false 
                 };
             } else if (rand < 0.85) {
-                // 15% 機率生成：體積加大了 100% 的螢光綠色「修理包」正立方體
                 const geo = new THREE.BoxGeometry(2.6, 2.6, 2.6);
-                const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00 }); // 綠色自發光科幻材質
+                const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00 }); 
                 mesh = new THREE.Mesh(geo, mat);
-                mesh.userData = { type: 'heal', radius: 2.6, hit: false }; // 設定寬廣的吃包碰撞半徑
+                mesh.userData = { type: 'heal', radius: 2.6, hit: false }; 
             } else {
-                // 15% 機率生成：淡藍色發光的圓環狀「宇宙圈」
-                const geo = new THREE.TorusGeometry(1.8, 0.15, 8, 24); // 圓環體 (主半徑 1.8, 管半徑 0.15)
-                const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x003366 }); // 水藍色發光圈材質
+                const geo = new THREE.TorusGeometry(1.8, 0.15, 8, 24); 
+                const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x003366 }); 
                 mesh = new THREE.Mesh(geo, mat);
                 mesh.userData = { type: 'ring', radius: 2.0, hit: false };
             }
 
-            // 給予物件初始生成座標，並賦予一個隨機的滾動自轉速度
             mesh.position.set(x, y, z);
             mesh.userData.rotX = Math.random() * 0.05;
             mesh.userData.rotY = Math.random() * 0.05;
 
-            scene.add(mesh); // 放入 3D 空間
-            obstacles.push(mesh); // 放入陣列追蹤移動與碰撞
+            scene.add(mesh); 
+            obstacles.push(mesh); 
         }
 
-        // 建立超酷的大爆炸 3D 粒子散射淡出動畫系統
         function createExplosion(position, colorHex, particleCount = 30) {
-            particleCount = particleCount * 2; // 將傳入的基礎粒子數翻倍，達到滿天碎片星火的效果
+            particleCount = particleCount * 2; 
 
             const geo = new THREE.BufferGeometry();
-            const posArray = new Float32Array(particleCount * 3); // 儲存每一個爆破微粒的當下 X, Y, Z
-            const velocities = []; // 儲存每個微粒各自被炸飛的獨立 3D 向量速度
+            const posArray = new Float32Array(particleCount * 3); 
+            const velocities = []; 
 
             for (let i = 0; i < particleCount; i++) {
-                // 一開始所有粒子都聚集在被打爆的物體中心點座標上
                 posArray[i * 3] = position.x;
                 posArray[i * 3 + 1] = position.y;
                 posArray[i * 3 + 2] = position.z;
 
-                // 利用球體座標系幾何演算法，產生 360 度隨機往四面八方擴散噴發的初始劇烈推力
                 const angle1 = Math.random() * Math.PI * 2;
                 const angle2 = Math.random() * Math.PI;
-                const speed = 12 + Math.random() * 23; // 大幅加強推力速度 (12 到 35 單位)
+                const speed = 12 + Math.random() * 23; 
 
                 velocities.push(new THREE.Vector3(
                     Math.sin(angle2) * Math.cos(angle1) * speed,
@@ -376,80 +338,67 @@
             }
 
             geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            
-            // 建立帶有透明度融合疊加效果 (AdditiveBlending) 的酷炫發光微粒材質
             const mat = new THREE.PointsMaterial({
                 size: 0.6, color: colorHex, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending 
             });
 
             const particleSystem = new THREE.Points(geo, mat);
-            // 儲存該粒子團的物理初速，並給予 0.9 秒的漫長生命週期讓擴散軌跡更壯觀
             particleSystem.userData = { velocities: velocities, age: 0, maxAge: 0.9 };
 
             scene.add(particleSystem);
-            particlesSystems.push(particleSystem); // 放入更新陣列中
+            particlesSystems.push(particleSystem); 
         }
 
-        // 玩家武器系統：發射雷射子彈
         let projectiles = [];
-        const projectileSpeed = 120; // 雷射飛行速度極快
+        const projectileSpeed = 120; 
         
         function fireProjectile() {
-            if(!gameActive) return; // 沒在玩就不能開火
+            if(!gameActive) return; 
             
-            // 建立一根朝向正前方的紅色小圓柱體雷射
             const geo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
-            geo.rotateX(Math.PI / 2); // 偏轉使其平躺指向前方
-            const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // 純鮮紅發光材質
+            geo.rotateX(Math.PI / 2); 
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); 
             const projectile = new THREE.Mesh(geo, mat);
             
-            // 讓子彈出生在飛船目前的 3D 座標上，且繼承飛船當下的翻轉姿態
             projectile.position.copy(spaceship.position);
             projectile.rotation.z = spaceship.rotation.z;
             
             scene.add(projectile);
-            projectiles.push(projectile); // 追蹤子彈
+            projectiles.push(projectile); 
         }
 
-        // 360 度精確虛擬搖桿底座與手柄的滑動數學演算法
         function initJoystick() {
             const base = document.getElementById('joy-base');
             const handle = document.getElementById('joy-handle');
-            let isDragging = false; // 紀錄滑鼠或手指是否正按著搖桿
-            const maxRadius = 45; // 限制搖桿內圈小按鈕能夠被往外推的最大物理像素距離
+            let isDragging = false; 
+            const maxRadius = 45; 
 
-            // 核心演算法：根據玩家手指滑動的絕對座標，計算出相對搖桿中心的向量
             function handleMove(clientX, clientY) {
                 if (!isDragging) return;
                 const rect = base.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2; // 底座圓心 X
-                const centerY = rect.top + rect.height / 2; // 底座圓心 Y
+                const centerX = rect.left + rect.width / 2; 
+                const centerY = rect.top + rect.height / 2; 
                 
                 let deltaX = clientX - centerX;
                 let deltaY = clientY - centerY;
-                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY); // 開平方根得到拖曳的直線距離
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY); 
 
-                // 如果手指推得太外面，等比例限制邊界
                 if (distance > maxRadius) {
                     deltaX = (deltaX / distance) * maxRadius;
                     deltaY = (deltaY / distance) * maxRadius;
                 }
-                // 更新 CSS transform 讓小圓圈手柄移動到手指對應位置
                 handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
                 
-                // 正規化成 -1.0 到 1.0 的控制純量。
                 joystickVector.x = deltaX / maxRadius;
                 joystickVector.y = -(deltaY / maxRadius);
             }
 
-            // 釋放搖桿時觸發的回正重置
             function handleEnd() {
                 isDragging = false;
-                handle.style.transform = `translate(0px, 0px)`; // 手柄滑回底座正中心
-                joystickVector.x = 0; joystickVector.y = 0;     // 位移向量歸零停止平移
+                handle.style.transform = `translate(0px, 0px)`; 
+                joystickVector.x = 0; joystickVector.y = 0;     
             }
 
-            // 註冊手機觸控(Touch)搖桿事件
             base.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 if(e.touches ? e.touches[0] : false) handleMove(e.touches[0].clientX, e.touches[0].clientY);
@@ -459,34 +408,40 @@
             });
             window.addEventListener('touchend', handleEnd);
 
-            // 註冊電腦滑鼠(Mouse)模擬搖桿拖曳事件
             base.addEventListener('mousedown', (e) => { isDragging = true; handleMove(e.clientX, e.clientY); });
             window.addEventListener('mousemove', (e) => { handleMove(e.clientX, e.clientY); });
             window.addEventListener('mouseup', handleEnd);
         }
 
-        // 綁定所有全設備 UI 事件監聽
         function setupControls() {
-            initJoystick(); // 啟動虛擬搖桿
+            initJoystick(); 
 
-            // 為開始與重來按鈕綁定純 JavaScript 點擊事件
             document.getElementById('real-start-btn').onclick = function() { forceUnlockAndStart(); };
             document.getElementById('real-restart-btn').onclick = function() { restartGame(); };
 
-            // 註冊右手發射按鈕
             const btnFire = document.getElementById('btn-fire');
             btnFire.onmousedown = function() { fireProjectile(); };
             btnFire.ontouchstart = function(e) { fireProjectile(); };
             
-            // 【操作修正點一】：滑鼠控制修正
-            // 當滑鼠向左滑動時（ratio為負），飛船應當逆時針旋轉（Z軸為正），所以改為 targetRoll = -ratio
+            // 滑鼠往左時(ratio為負)，機體應當逆時針翻滾(Z軸為正)，故 targetRoll = -ratio 
             window.addEventListener('mousemove', (e) => {
                 if(!gameActive || hasGyro) return; 
-                let ratio = (e.clientX / window.innerWidth) * 2 - 1; // 映射出 -1 到 1 的比例
-                targetRoll = -ratio * (Math.PI / 2); // 移除反向號，向左滑(負)對應逆時針轉(正)
+                let ratio = (e.clientX / window.innerWidth) * 2 - 1; 
+                targetRoll = -ratio * (Math.PI / 2); 
             });
 
-            // 註冊電腦鍵盤控制
+            // 【更正修正點】：將發射武器綁定在滑鼠左鍵點擊 (e.button === 0)
+            window.addEventListener('mousedown', (e) => {
+                if(!gameActive) return;
+                // 防止點選到搖桿或UI紅色按鈕時重複射擊
+                if(e.target.closest('#joy-base') || e.target.id === 'btn-fire') return;
+                
+                // 限制只有滑鼠左鍵可以開火
+                if(e.button === 0) {
+                    fireProjectile();
+                }
+            });
+
             window.addEventListener('keydown', (e) => {
                 if(e.key === 'ArrowUp' || e.key === 'w') inputState.up = true;
                 if(e.key === 'ArrowDown' || e.key === 's') inputState.down = true;
@@ -502,9 +457,8 @@
             });
         }
 
-        // 核心解鎖機制
         function forceUnlockAndStart() {
-            startGame(); // 優先進入遊戲
+            startGame(); 
             
             try {
                 if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -520,23 +474,7 @@
             } catch (e) {}
         }
 
-        // 【操作修正點二】：手機陀螺儀翻轉方向修正
-        function forceUnlockAndStart() {
-            startGame(); 
-            try {
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(permissionState => {
-                            if (permissionState === 'granted') {
-                                window.addEventListener('deviceorientation', handleOrientation); 
-                            }
-                        }).catch(()=>{});
-                } else {
-                    window.addEventListener('deviceorientation', handleOrientation); 
-                }
-            } catch (e) {}
-        }
-
+        // 【陀螺儀方向修復】：手機向左傾斜時(tilt為負)，機體應進行逆時針翻滾(Z軸旋轉為正)，故 targetRoll = -ratio
         function handleOrientation(event) {
             if (!gameActive || !event) return;
             if (event.beta !== null || event.gamma !== null) {
@@ -551,11 +489,10 @@
             let ratio = tilt / 45; 
             if(ratio > 1) ratio = 1; if(ratio < -1) ratio = -1;
             
-            // 修正為正號對應關係：手機向左傾斜時，數值與航空傾斜一致，觸發逆時針旋轉
-            targetRoll = ratio * (Math.PI / 2);
+            // 經數學公式換算：向左歪為負值，帶入負號翻轉為正弧度，實現逆時針翻滾
+            targetRoll = -ratio * (Math.PI / 2);
         }
 
-        // 初始化與開局
         function startGame() {
             document.getElementById('start-overlay').style.display = 'none'; 
             window.focus(); 
@@ -630,7 +567,6 @@
                 score += delta * 10; 
                 document.getElementById('hud-score').innerText = `分數: ${Math.floor(score)}`;
 
-                // 整合搖桿與鍵盤向量
                 let moveX = joystickVector.x;
                 let moveY = joystickVector.y;
 
@@ -649,20 +585,18 @@
                     spaceship.position.x = Math.max(-boundsX, Math.min(boundsX, spaceship.position.x));
                     spaceship.position.y = Math.max(-boundsY, Math.min(boundsY, spaceship.position.y));
 
-                    // 【操作修正點三】：純按鍵/無陀螺儀鍵盤操作翻滾修正
-                    // 按下左移鍵(moveX為負)時，太空船應當逆時針翻滾(Z軸旋轉為正)，所以修正為負號：targetRoll = -moveX
+                    // 方向鍵/WASD按鍵操作時(按左鍵moveX為負)，機體應進行逆時針翻滾(Z軸為正)，故 targetRoll = -moveX
                     if (!hasGyro) {
                         if (moveX !== 0) { 
-                            targetRoll = -moveX * (Math.PI / 3); // 負負得正。按左鍵(-1)對應 +60度 逆時針壓車！
+                            targetRoll = -moveX * (Math.PI / 3); 
                         } else { 
                             targetRoll *= 0.9; 
                         }
                     }
 
-                    // 線性滑順逼近
                     currentRoll += (targetRoll - currentRoll) * 0.12;
                     spaceship.rotation.z = currentRoll; 
-                    spaceship.rotation.y = currentRoll * 0.2; // 航向角同步偏轉
+                    spaceship.rotation.y = currentRoll * 0.2; 
                 }
 
                 spawnInterval = Math.max(150, 666 - (gameTime * 15));
@@ -706,7 +640,7 @@
                     }
                 }
 
-                // 機體與障礙物矩陣碰撞
+                // 機體與障礙物碰撞
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     const obj = obstacles[i];
                     obj.position.z += baseSpeed * delta; 
