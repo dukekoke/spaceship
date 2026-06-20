@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>太空飛船：隕城危機 3D (野生無人機碰撞修正版)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none !important; 
+        }
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        @media screen and (orientation: portrait) {
+            #portrait-warning { display: flex !important; }
+        }
+        #portrait-warning {
+            display: none; position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #111; color: white;
+            z-index: 9999; justify-content: center; align-items: center;
+            text-align: center; font-size: 24px; padding: 20px;
+        }
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0; z-index: 1;
+        }
+        .ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 15px; z-index: 10;
+        }
+        .hud {
+            display: flex; justify-content: space-between;
+            color: #fff; font-size: 18px; font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        #game-alert {
+            position: absolute;
+            top: 40%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px; font-weight: bold;
+            text-align: center;
+            z-index: 50;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.8);
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        .controls {
+            display: flex; justify-content: space-between;
+            align-items: flex-end; margin-bottom: 10px;
+            pointer-events: none; width: 100%;
+        }
+        .joystick-base {
+            width: 140px; height: 140px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; position: relative;
+            backdrop-filter: blur(5px); display: flex;
+            justify-content: center; align-items: center;
+            pointer-events: auto;
+        }
+        .joystick-handle {
+            width: 55px; height: 55px;
+            background: rgba(255, 255, 255, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 50%; position: absolute;
+            cursor: pointer; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+            pointer-events: none; 
+        }
+        .joystick-base:active .joystick-handle { background: rgba(255, 255, 255, 0.6); }
+
+        #btn-fire {
+            width: 110px; height: 110px;
+            background: rgba(255, 50, 50, 0.4);
+            border: 3px solid rgba(255, 100, 100, 0.8);
+            border-radius: 50%; color: white;
+            font-size: 22px; font-weight: bold;
+            display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(255, 50, 50, 0.5);
+            cursor: pointer; pointer-events: auto;
+        }
+        #btn-fire:active { background: rgba(255, 100, 100, 0.7); }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 15, 0.95); display: flex;
+            justify-content: center; align-items: center; color: white;
+            z-index: 9999; pointer-events: auto !important;
+        }
+        .menu-card {
+            background: rgba(30, 30, 40, 0.95); border: 2px solid #444;
+            border-radius: 10px; padding: 20px 35px; text-align: center;
+            max-width: 580px; width: 95%; box-shadow: 0 0 20px rgba(0,191,255,0.5);
+        }
+        .menu-card h1 { margin-top: 0; color: #00bfff; font-size: 24px; }
+        
+        .info-desc {
+            text-align: left; font-size: 13px; line-height: 1.6; color:#ccc; 
+            margin: 10px 0; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px;
+            max-height: 250px; overflow-y: auto; border: 1px solid #333;
+        }
+        .section-header { font-weight: bold; color: #00bfff; font-size: 14px; margin-top: 8px; border-bottom: 1px solid #444; padding-bottom: 2px;}
+        .section-header.advanced { color: #ff4d4d; border-color: #ff3333; }
+        .info-title { font-weight: bold; color: #fff; margin-top: 4px; }
+
+        .start-btn {
+            background: #00bfff; border: none; color: white;
+            padding: 12px 40px; font-size: 18px; font-weight: bold;
+            border-radius: 5px; cursor: pointer; margin-top: 10px;
+            display: inline-block; box-shadow: 0 4px 10px rgba(0, 191, 255, 0.4);
+        }
+        .start-btn:hover { background: #0099cc; }
+        .leaderboard-table { width: 100%; margin: 15px 0; border-collapse: collapse; }
+        .leaderboard-table th, .leaderboard-table td { border-bottom: 1px solid #444; padding: 6px; font-size: 14px; }
+        .leaderboard-table th { color: #00bfff; }
+
+        .mode-container {
+            margin: 10px 0;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 16px; font-weight: bold; color: #fff;
+        }
+        .mode-label { margin-right: 15px; text-shadow: 0 0 10px rgba(0, 191, 255, 0.5); }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #444; border: 1px solid #666; transition: .3s; border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 26px; width: 26px; left: 3px; bottom: 3px;
+            background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #ff4d4d; border-color: #ff3333; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        input:checked + .slider { box-shadow: 0 0 15px rgba(255, 77, 77, 0.8); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="portrait-warning">請將手機旋轉為【橫屏】進行遊戲 🔄</div>
+    <div id="canvas-container"></div>
+
+    <div class="ui-layer">
+        <div class="hud">
+            <div id="hud-hp">HP: 100</div>
+            <div id="hud-mode" style="color: #00bfff;">模式: 基礎</div>
+            <div id="hud-score">分數: 0</div>
+        </div>
+        
+        <div id="game-alert"></div>
+
+        <div class="controls">
+            <div class="joystick-base" id="joy-base">
+                <div class="joystick-handle" id="joy-handle"></div>
+            </div>
+            <div id="btn-fire">發射</div>
+        </div>
+    </div>
+
+    <div id="start-overlay" class="overlay">
+        <div class="menu-card">
+            <h1>太空飛船：隕城危機 3D</h1>
+            
+            <div class="info-desc">
+                <div>【基本操作】鍵盤【WASD/方向鍵】或螢幕【虛擬搖桿】平移；【滑鼠左鍵/空白鍵/紅色按鈕】發射武器。</div>
+                
+                <div class="section-header">🌐 1. 普通模式基本物件</div>
+                <div class="info-title">🪨 隕石 (Asteroid)</div>
+                <div>迎面而來的宇宙碎屑，撞擊會造成 -25HP 的傷害。可利用飛船主砲雷射將其擊碎。</div>
+                <div class="info-title">💚 修理包 (Heal Pack)</div>
+                <div>綠色發光立方體，駕駛飛船碰撞捕獲後可立即回復 20 點 HP。</div>
+                <div class="info-title">💎 宇宙圈 (Torus Ring)</div>
+                <div>青色發光圓環，駕機穿過可獲得分數獎勵。</div>
+
+                <div class="section-header">🔥 2. 進階模式新增物件 (強敵解鎖)</div>
+                <div class="info-title">🛸 無人機蜂群 (Drone)</div>
+                <div>會從後方超車並射出「麻痺鎖鏈」，每鎖鏈1台本機會減速 5%。若超過3台無人機鎖定本機，每秒鐘會損失2分。**若太靠近死星會被死星防護網自動引爆**</div>
+                <div class="info-title">🌑 魔王：死星 (Death Star)</div>
+                <div>分數達 1000 分或其倍數準時降臨。5秒蓄力發射實體平行綠色雷射巨砲。擊毀獲 +200分，逃脫重扣 -100分。</div>
+                <div class="info-title">✨ 原力包 (Force Pack)</div>
+                <div>亮紫色神祕水晶。吃到後全面遏制新無人機產生，並俘獲場上無人機化為圓形防禦網。按下發射鍵，無人機會以平行直線飛射，遇到障礙物或死星引爆重擊！</div>
+            </div>
+            
+            <div class="mode-container">
+                <span class="mode-label" id="mode-text">🔥 啟動進階模式 (解鎖強敵)：</span>
+                <label class="switch">
+                    <input type="checkbox" id="advanced-mode-checkbox">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <button class="start-btn" id="real-start-btn">進入太空</button>
+        </div>
+    </div>
+
+    <div id="gameover-overlay" class="overlay" style="display: none;">
+        <div class="menu-card">
+            <h1 style="color: #ff4d4d;">GAME OVER</h1>
+            <p>本次得分: <span id="final-score" style="color:#fff; font-size:20px; font-weight:bold;">0</span></p>
+            <h3>🏆 本地排行榜</h3>
+            <table class="leaderboard-table">
+                <thead>
+                    <tr><th>名次</th><th>最高分數 (模式)</th><th>日期</th></tr>
+                </thead>
+                <tbody id="leaderboard-body"></tbody>
+            </table>
+            <button class="start-btn" id="real-restart-btn" style="background:#ff4d4d; box-shadow: 0 4px 10px rgba(255, 77, 77, 0.4);">再試一次</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心 3D 全域變數 ---
+        let scene, camera, renderer;         
+        let spaceship, leftWing, rightWing;  
+        let starField;                       
+        let obstacles = [];                  
+        let projectiles = [];                
+        let particlesSystems = [];           
+        let gameActive = false;              
+        
+        let hp = 100;                        
+        let baseSpeed = 45;                  
+        let score = 0;                       
+        let gameTime = 0;                    
+        let spawnTimer = 0;                  
+        let spawnInterval = 666;             
+        
+        let projectileSpeed = 120;           
+        let currentMoveSpeed = 22;           
+        let baseMoveSpeed = 22;              
+        let boundsX = 12;                    
+        let boundsY = 7;
+
+        let isAdvancedMode = false;          
+        let targetRoll = 0;                  
+        let currentRoll = 0;                 
+        let hasGyro = false;                 
+
+        let joystickVector = { x: 0, y: 0 }; 
+        const inputState = { up: false, down: false, left: false, right: false }; 
+
+        let chainLinesPool = []; 
+        const maxDroneLimit = 6; 
+        let enemyBeams = [];
+        let joystickTouchId = null; 
+
+        let droneDrainTimer = 0;
+        let lastTriggeredMilestone = 0;      
+        let deathStarQueue = false;          
+
+        document.addEventListener('DOMContentLoaded', () => {
+            init3D();
+        });
+
+        function init3D() {
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+            document.getElementById('canvas-container').appendChild(renderer.domElement); 
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            window.addEventListener('resize', onWindowResize); 
+            setupControls(); 
+            animate(); 
+        }
+
+        function setupSceneEnvironment() {
+            scene.background = new THREE.Color(0x020208); 
+            scene.fog = new THREE.FogExp2(0x020208, 0.01);
+
+            camera.position.set(0, 5, 12); 
+            camera.lookAt(0, 0, -5);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
+            scene.add(ambientLight);
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); 
+            dirLight.position.set(5, 15, 10);
+            scene.add(dirLight);
+
+            createStarfield(); 
+            createSpaceship(); 
+            updateScreenBounds(); 
+
+            chainLinesPool = [];
+            for(let i = 0; i < maxDroneLimit; i++) {
+                const chainMat = new THREE.LineBasicMaterial({ color: 0x9933ff, linewidth: 2 });
+                const chainGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+                const line = new THREE.Line(chainGeo, chainMat);
+                chainLinesPool.push(line);
+            }
+        }
+
+        function updateScreenBounds() {
+            if (!camera) return;
+            const distance = 12; 
+            const vFOV = THREE.MathUtils.degToRad(camera.fov); 
+            const visibleHeight = 2 * Math.tan(vFOV / 2) * distance; 
+            const visibleWidth = visibleHeight * camera.aspect; 
+            boundsX = (visibleWidth / 2) - 2.8; 
+            boundsY = (visibleHeight / 2) - 1.8; 
+            boundsY -= 0.5; 
+        }
+
+        function createSpaceship() {
+            spaceship = new THREE.Group(); 
+            const bodyGeo = new THREE.ConeGeometry(0.9, 4.5, 16);
+            bodyGeo.rotateX(Math.PI / 2); 
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.5, roughness: 0.2 }); 
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            spaceship.add(bodyMesh); 
+
+            const wingGeo = new THREE.BoxGeometry(3.3, 0.22, 1.2);
+            const wingMat = new THREE.MeshStandardMaterial({ color: 0x00bfff, roughness: 0.5 });
+            leftWing = new THREE.Mesh(wingGeo, wingMat);
+            leftWing.position.set(-2.4, 0, 0); 
+            spaceship.add(leftWing);
+            rightWing = new THREE.Mesh(wingGeo, wingMat);
+            rightWing.position.set(2.4, 0, 0); 
+            spaceship.add(rightWing);
+            spaceship.position.set(0, 0, 0);
+            scene.add(spaceship);
+        }
+
+        function createStarfield() {
+            const starGeo = new THREE.BufferGeometry(); 
+            const starCount = 800; 
+            const posArray = new Float32Array(starCount * 3); 
+            for(let i=0; i<starCount*3; i+=3) {
+                posArray[i] = (Math.random() - 0.5) * 300;     
+                posArray[i+1] = (Math.random() - 0.5) * 200;   
+                posArray[i+2] = (Math.random() - 0.5) * 400 - 200; 
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3)); 
+            const starMat = new THREE.PointsMaterial({ size: 0.6, color: 0xffffff }); 
+            starField = new THREE.Points(starGeo, starMat); 
+            scene.add(starField); 
+        }
+
+        function showGameAlert(text, colorHex) {
+            const alertDiv = document.getElementById('game-alert');
+            if(!alertDiv) return;
+            alertDiv.innerText = text;
+            alertDiv.style.color = colorHex;
+            alertDiv.style.opacity = '1'; 
+            setTimeout(() => { alertDiv.style.opacity = '0'; }, 2000); 
+        }
+
+        function spawnObject() {
+            const rand = Math.random(); 
+            let mesh;
+            let x = (Math.random() - 0.5) * (boundsX * 3.5);  
+            let y = (Math.random() - 0.5) * (boundsY * 3.5);  
+            let z = -90; 
+
+            const existingDeathStar = (Array.isArray(obstacles) && obstacles.length > 0) ? obstacles.find(o => o && o.userData && o.userData.type === 'deathstar' && !o.userData.toRemove) : null;
+
+            if (isAdvancedMode) {
+                const currentDroneCount = Array.isArray(obstacles) ? obstacles.filter(o => o && o.userData && o.userData.type === 'drone' && !o.userData.toRemove).length : 0;
+                const hasCapturedDrones = Array.isArray(obstacles) ? obstacles.some(o => o && o.userData && o.userData.type === 'drone' && o.userData.phase === 'captured' && !o.userData.toRemove) : false;
+
+                let currentMilestone = Math.floor(score / 1000);
+                if (currentMilestone > lastTriggeredMilestone && currentMilestone >= 1) {
+                    deathStarQueue = true; 
+                    lastTriggeredMilestone = currentMilestone; 
+                    showGameAlert("⚠️ 偵測到巨大能量接近：死星即將降臨！", "#ff3333");
+                }
+
+                if (deathStarQueue && !existingDeathStar) {
+                    deathStarQueue = false; 
+                    const geo = new THREE.SphereGeometry(6, 32, 32);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0x99999a, roughness: 0.6, metalness: 0.3 }); 
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(0, 2, -130); 
+                    mesh.userData = { 
+                        type: 'deathstar', 
+                        radius: 6.0, 
+                        hp: 10, 
+                        fireTimer: 0, 
+                        rotX: 0.003, rotY: 0.003, hit: false,
+                        toRemove: false
+                    };
+                    scene.add(mesh);
+                    obstacles.push(mesh);
+                    return; 
+                }
+
+                if (!hasCapturedDrones && rand < 0.14 && currentDroneCount < maxDroneLimit) {
+                    const geo = new THREE.OctahedronGeometry(1.2); 
+                    const mat = new THREE.MeshStandardMaterial({ color: 0x9933ff, metalness: 0.7, roughness: 0.1 });
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 6, 25); 
+                    mesh.userData = { 
+                        type: 'drone', 
+                        radius: 1.5, 
+                        hp: 3, 
+                        phase: 'arrive', 
+                        targetSide: Math.random() < 0.5 ? -1 : 1, 
+                        hoverAngle: Math.random() * Math.PI * 2, 
+                        rotX: 0.06, rotY: 0.06, hit: false,
+                        launchVx: 0, launchVy: 0,
+                        toRemove: false
+                    };
+                    scene.add(mesh);
+                    obstacles.push(mesh);
+                    return;
+                } 
+                else if (rand >= 0.14 && rand < 0.19) {
+                    const geo = new THREE.BoxGeometry(2.0, 2.0, 2.0);
+                    const mat = new THREE.MeshStandardMaterial({ color: 0xbd00ff, emissive: 0x4a00aa, roughness: 0.2 }); 
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.userData = { type: 'force', radius: 2.2, hit: false, toRemove: false };
+                    mesh.position.set(x, y, z);
+                    mesh.userData.rotX = 0.03; mesh.userData.rotY = 0.03; 
+                    scene.add(mesh);
+                    obstacles.push(mesh);
+                    return;
+                }
+            }
+
+            if (existingDeathStar) {
+                if (Math.abs(x) < 8.0) { x = x >= 0 ? x + 7.0 : x - 7.0; }
+            }
+
+            if (rand < 0.70) {
+                const sizeScale = 0.4 + Math.random() * 2.1; 
+                const geo = new THREE.DodecahedronGeometry(sizeScale); 
+                const mat = new THREE.MeshStandardMaterial({ color: 0xcd853f, roughness: 0.9 }); 
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { 
+                    type: 'asteroid', 
+                    radius: sizeScale * 1.2, 
+                    sizeType: sizeScale > 1.6 ? 'large' : (sizeScale < 0.8 ? 'small' : 'medium'), 
+                    rotX: (Math.random() - 0.5) * 0.04,
+                    rotY: (Math.random() - 0.5) * 0.04,
+                    hit: false,
+                    toRemove: false
+                };
+            } else if (rand < 0.85) {
+                const geo = new THREE.BoxGeometry(2.6, 2.6, 2.6);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00 }); 
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'heal', radius: 2.6, hit: false, toRemove: false }; 
+            } else {
+                const geo = new THREE.TorusGeometry(1.8, 0.15, 8, 24); 
+                const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x003366 }); 
+                mesh = new THREE.Mesh(geo, mat);
+                mesh.userData = { type: 'ring', radius: 2.0, hit: false, toRemove: false };
+            }
+
+            mesh.position.set(x, y, z);
+            if(mesh.userData.type !== 'asteroid') {
+                mesh.userData.rotX = Math.random() * 0.05;
+                mesh.userData.rotY = Math.random() * 0.05;
+            }
+            scene.add(mesh); 
+            obstacles.push(mesh); 
+        }
+
+        function fireProjectile() {
+            if(!gameActive) return; 
+            
+            let hasCapturedDrones = obstacles.some(o => o && o.userData && o.userData.type === 'drone' && o.userData.phase === 'captured' && !o.userData.toRemove);
+            if (hasCapturedDrones) {
+                obstacles.forEach(o => {
+                    if (o && o.userData && o.userData.type === 'drone' && o.userData.phase === 'captured') {
+                        o.userData.phase = 'launched'; 
+                        o.userData.launchVx = 0;
+                        o.userData.launchVy = 0;
+                        createExplosion(o.position, 0xbd00ff, 15); 
+                    }
+                });
+                showGameAlert("原力解放：浮游砲出擊！", "#bd00ff");
+            }
+
+            const geo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
+            geo.rotateX(Math.PI / 2); 
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); 
+            const projectile = new THREE.Mesh(geo, mat);
+            projectile.position.copy(spaceship.position);
+            projectile.rotation.z = spaceship.rotation.z;
+            
+            projectile.userData = { toRemove: false };
+            scene.add(projectile);
+            projectiles.push(projectile); 
+        }
+
+        function fireDeathBeam(originPos) {
+            const geo = new THREE.CylinderGeometry(0.8, 0.8, 35, 12); 
+            geo.rotateX(Math.PI / 2); 
+            const mat = new THREE.MeshBasicMaterial({ color: 0x00ff33, transparent: true, opacity: 0.85 }); 
+            const beamMesh = new THREE.Mesh(geo, mat);
+            
+            beamMesh.position.copy(originPos);
+            beamMesh.position.z += 6.0; 
+            
+            let targetX = spaceship ? spaceship.position.x : 0;
+            let targetY = spaceship ? spaceship.position.y : 0;
+            let zDist = 90; 
+            beamMesh.userData = {
+                vx: (targetX - beamMesh.position.x) / zDist * (baseSpeed * 2.0),
+                vy: (targetY - beamMesh.position.y) / zDist * (baseSpeed * 2.0),
+                speedZ: baseSpeed * 2.0, 
+                radius: 1.8, 
+                hitPlayer: false,
+                toRemove: false
+            };
+            scene.add(beamMesh);
+            enemyBeams.push(beamMesh);
+        }
+
+        function initJoystick() {
+            const base = document.getElementById('joy-base');
+            const handle = document.getElementById('joy-handle');
+            if(!base || !handle) return;
+            const maxRadius = 45; 
+
+            function handleMove(clientX, clientY) {
+                const rect = base.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2; const centerY = rect.top + rect.height / 2; 
+                let deltaX = clientX - centerX; let deltaY = clientY - centerY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY); 
+
+                if (distance > maxRadius) {
+                    deltaX = (deltaX / distance) * maxRadius;
+                    deltaY = (deltaY / distance) * maxRadius;
+                }
+                handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                joystickVector.x = deltaX / maxRadius;
+                joystickVector.y = -(deltaY / maxRadius);
+            }
+
+            base.addEventListener('touchstart', (e) => {
+                if (joystickTouchId !== null) return; 
+                const touch = e.changedTouches[0];
+                joystickTouchId = touch.identifier; 
+                handleMove(touch.clientX, touch.clientY);
+            }, { passive: true });
+
+            window.addEventListener('touchmove', (e) => {
+                if (joystickTouchId === null) return;
+                for (let i = 0; i < e.touches.length; i++) {
+                    if (e.touches[i].identifier === joystickTouchId) {
+                        handleMove(e.touches[i].clientX, e.touches[i].clientY);
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            const endHandler = (e) => {
+                if (joystickTouchId === null) return;
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystickTouchId) {
+                        joystickTouchId = null; 
+                        handle.style.transform = `translate(0px, 0px)`; 
+                        joystickVector.x = 0; joystickVector.y = 0;     
+                        break;
+                    }
+                }
+            };
+            window.addEventListener('touchend', endHandler);
+            window.addEventListener('touchcancel', endHandler);
+
+            let isMouseDown = false;
+            base.addEventListener('mousedown', (e) => { isMouseDown = true; handleMove(e.clientX, e.clientY); });
+            window.addEventListener('mousemove', (e) => { if (isMouseDown) handleMove(e.clientX, e.clientY); });
+            window.addEventListener('mouseup', () => { isMouseDown = false; handle.style.transform = `translate(0px, 0px)`; joystickVector.x = 0; joystickVector.y = 0; });
+        }
+
+        function setupControls() {
+            initJoystick(); 
+            const startBtn = document.getElementById('real-start-btn');
+            if(startBtn) startBtn.onclick = function() { forceUnlockAndStart(); };
+            
+            const realRestart = document.getElementById('real-restart-btn');
+            if(realRestart) realRestart.onclick = function() { restartGame(); };
+
+            const btnFire = document.getElementById('btn-fire');
+            if(btnFire) {
+                btnFire.addEventListener('touchstart', (e) => { fireProjectile(); }, { passive: true });
+                btnFire.onmousedown = function(e) { fireProjectile(); };
+            }
+            
+            window.addEventListener('mousemove', (e) => {
+                if(!gameActive || hasGyro) return; 
+                let ratio = (e.clientX / window.innerWidth) * 2 - 1; 
+                targetRoll = -ratio * (Math.PI / 2); 
+            });
+            window.addEventListener('mousedown', (e) => {
+                if(!gameActive) return;
+                if(e.target.closest('#joy-base') || e.target.id === 'btn-fire') return;
+                if(e.button === 0) { fireProjectile(); } 
+            });
+
+            window.addEventListener('keydown', (e) => {
+                if(!gameActive) return;
+                const k = e.key.toLowerCase();
+                if(k === 'arrowup' || k === 'w') inputState.up = true;
+                if(k === 'arrowdown' || k === 's') inputState.down = true;
+                if(k === 'arrowleft' || k === 'a') inputState.left = true;
+                if(k === 'arrowright' || k === 'd') inputState.right = true;
+                if(e.key === ' ' || k === 'f' || e.key === 'Enter') { fireProjectile(); }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const k = e.key.toLowerCase();
+                if(k === 'arrowup' || k === 'w') inputState.up = false;
+                if(k === 'arrowdown' || k === 's') inputState.down = false;
+                if(k === 'arrowleft' || k === 'a') inputState.left = false;
+                if(k === 'arrowright' || k === 'd') inputState.right = false;
+            });
+        }
+
+        function forceUnlockAndStart() {
+            const checkbox = document.getElementById('advanced-mode-checkbox');
+            isAdvancedMode = checkbox ? checkbox.checked : false;
+            startGame(); 
+            try {
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission().then(permissionState => {
+                        if (permissionState === 'granted') window.addEventListener('deviceorientation', handleOrientation); 
+                    }).catch(()=>{});
+                } else { window.addEventListener('deviceorientation', handleOrientation); }
+            } catch (e) {}
+        }
+
+        function handleOrientation(event) {
+            if (!gameActive || !event) return;
+            if (event.beta !== null || event.gamma !== null) { hasGyro = true; } else { return; }
+            let isLandscape = window.innerWidth > window.innerHeight;
+            let tilt = isLandscape ? event.beta : event.gamma; 
+            let ratio = tilt / 45; 
+            if(ratio > 1) ratio = 1; if(ratio < -1) ratio = -1;
+            targetRoll = -ratio * (Math.PI / 2);
+        }
+
+        function startGame() {
+            const startOverlay = document.getElementById('start-overlay');
+            if(startOverlay) startOverlay.style.display = 'none'; 
+            window.focus(); 
+            
+            scene.clear(); 
+            setupSceneEnvironment();
+
+            obstacles = []; 
+            projectiles = []; 
+            particlesSystems = []; 
+            enemyBeams = []; 
+
+            droneDrainTimer = 0;
+            lastTriggeredMilestone = 0; 
+            deathStarQueue = false;
+
+            if (isAdvancedMode) {
+                baseSpeed = 60; spawnInterval = 400; 
+                document.getElementById('hud-mode').innerText = "模式: 進階🔥";
+                document.getElementById('hud-mode').style.color = "#ff4d4d";
+            } else {
+                baseSpeed = 45; spawnInterval = 666;
+                document.getElementById('hud-mode').innerText = "模式: 基礎";
+                document.getElementById('hud-mode').style.color = "#00bfff";
+            }
+
+            gameActive = true; hp = 100; score = 0; gameTime = 0; spawnTimer = 0; 
+            currentMoveSpeed = baseMoveSpeed; 
+            joystickTouchId = null; 
+            
+            document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+            document.getElementById('hud-score').innerText = `分數: ${score}`;
+            
+            joystickVector.x = 0; joystickVector.y = 0;
+            targetRoll = 0; currentRoll = 0;
+            
+            spawnObject(); 
+        }
+
+        function restartGame() {
+            document.getElementById('gameover-overlay').style.display = 'none';
+            startGame();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
+            enemyBeams.forEach(b => { if(b) scene.remove(b); }); 
+            document.getElementById('final-score').innerText = Math.floor(score); 
+            saveLeaderboard(Math.floor(score)); showLeaderboard(); 
+            document.getElementById('gameover-overlay').style.display = 'flex'; 
+        }
+
+        function saveLeaderboard(finalScore) {
+            try {
+                let scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+                const modeLabel = isAdvancedMode ? "進階🔥" : "基礎";
+                scores.push({ score: finalScore, mode: modeLabel, date: new Date().toLocaleDateString() }); 
+                scores.sort((a, b) => b.score - a.score); scores = scores.slice(0, 5); 
+                localStorage.setItem('space_game_scores', JSON.stringify(scores)); 
+            } catch(e){}
+        }
+
+        function showLeaderboard() {
+            try {
+                const scores = JSON.parse(localStorage.getItem('space_game_scores')) || [];
+                const tbody = document.getElementById('leaderboard-body');
+                if(!tbody) return; tbody.innerHTML = ''; 
+                if(scores.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3">暫無資料</td></tr>`; return;
+                }
+                scores.forEach((item, index) => {
+                    tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.score} <small>(${item.mode || '基礎'})</small></td><td>${item.date}</td></tr>`;
+                });
+            } catch(e){}
+        }
+
+        function createExplosion(pos, colorHex, count = 25) {
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = pos.x; positions[i * 3 + 1] = pos.y; positions[i * 3 + 2] = pos.z;
+                velocities.push(new THREE.Vector3(
+                    (Math.random() - 0.5) * 35, (Math.random() - 0.5) * 35, (Math.random() - 0.5) * 35
+                ));
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({
+                color: colorHex, size: 0.5, transparent: true, opacity: 1, blending: THREE.AdditiveBlending
+            });
+            const pSystem = new THREE.Points(geo, mat);
+            pSystem.userData = { velocities: velocities, age: 0, maxAge: 0.8 };
+            scene.add(pSystem); particlesSystems.push(pSystem);
+        }
+
+        function flashScreen(color) {
+            if(renderer) {
+                renderer.setClearColor(new THREE.Color(color), 0.4);
+                setTimeout(() => { if(renderer) renderer.setClearColor(0x020208, 1); }, 60);
+            }
+        }
+        function flashScreenLong(color) {
+            if(renderer) {
+                renderer.setClearColor(new THREE.Color(color), 0.8);
+                setTimeout(() => { if(renderer) renderer.setClearColor(0x020208, 1); }, 180);
+            }
+        }
+
+        let lastTime = performance.now(); 
+
+        function animate() {
+            requestAnimationFrame(animate); 
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000; 
+            lastTime = now;
+
+            if (gameActive) {
+                gameTime += delta; 
+                score += delta * (isAdvancedMode ? 15 : 10); 
+                document.getElementById('hud-score').innerText = `分數: ${Math.floor(score)}`;
+
+                const activeDrones = obstacles.filter(o => o && o.userData && o.userData.type === 'drone' && o.userData.phase === 'chain' && !o.userData.toRemove);
+                const droneCount = activeDrones.length;
+
+                if (droneCount > 0) {
+                    currentMoveSpeed = baseMoveSpeed * (1.0 - (droneCount * 0.05));
+                    if(currentMoveSpeed < 4.0) currentMoveSpeed = 4.0; 
+                    if (droneCount >= 3) {
+                        droneDrainTimer += delta;
+                        if (droneDrainTimer >= 1.0) { score = Math.max(0, score - 2); droneDrainTimer = 0; }
+                    }
+                } else {
+                    currentMoveSpeed = baseMoveSpeed; 
+                }
+
+                chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
+
+                let moveX = joystickVector.x; let moveY = joystickVector.y;
+                if (inputState.up) moveY += 1.0; if (inputState.down) moveY -= 1.0;
+                if (inputState.left) moveX -= 1.0; if (inputState.right) moveX += 1.0;
+
+                const vectorLen = Math.sqrt(moveX * moveX + moveY * moveY);
+                if (vectorLen > 1) { moveX /= vectorLen; moveY /= vectorLen; }
+
+                if(spaceship) {
+                    spaceship.position.x += moveX * currentMoveSpeed * delta;
+                    spaceship.position.y += moveY * currentMoveSpeed * delta;
+                    spaceship.position.x = Math.max(-boundsX, Math.min(boundsX, spaceship.position.x));
+                    spaceship.position.y = Math.max(-boundsY, Math.min(boundsY, spaceship.position.y));
+
+                    if (!hasGyro) {
+                        if (moveX !== 0) { targetRoll = -moveX * (Math.PI / 3); } else { targetRoll *= 0.9; }
+                    }
+                    currentRoll += (targetRoll - currentRoll) * 0.12;
+                    spaceship.rotation.z = currentRoll; spaceship.rotation.y = currentRoll * 0.2; 
+                }
+
+                const minInterval = isAdvancedMode ? 100 : 150;
+                spawnInterval = Math.max(minInterval, (isAdvancedMode ? 400 : 666) - (gameTime * 15));
+                
+                if(starField) {
+                    starField.position.z += baseSpeed * delta;
+                    if (starField.position.z > 200) starField.position.z = 0; 
+                }
+
+                spawnTimer += delta * 1000;
+                if (spawnTimer >= spawnInterval) { spawnObject(); spawnTimer = 0; }
+
+                // 玩家子彈
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    const projectile = projectiles[i];
+                    projectile.position.z -= projectileSpeed * delta; 
+
+                    if (projectile.position.z < -100) {
+                        projectile.userData.toRemove = true;
+                    } else {
+                        for (let j = 0; j < obstacles.length; j++) {
+                            const obstacle = obstacles[j];
+                            if (!obstacle || !obstacle.userData || obstacle.userData.hit || obstacle.userData.toRemove) continue;
+
+                            const dist = projectile.position.distanceTo(obstacle.position); 
+                            if (dist < obstacle.userData.radius) {
+                                if (obstacle.userData.type === 'asteroid') {
+                                    obstacle.userData.hit = true; obstacle.userData.toRemove = true;
+                                    createExplosion(obstacle.position, 0xd2691e, 30);
+                                    projectile.userData.toRemove = true; break;
+                                } 
+                                else if (obstacle.userData.type === 'drone') {
+                                    if (obstacle.userData.phase === 'arrive' || obstacle.userData.phase === 'chain') {
+                                        obstacle.userData.hp -= 1;
+                                        createExplosion(projectile.position, 0x9933ff, 10); 
+                                        projectile.userData.toRemove = true;
+                                        if (obstacle.userData.hp <= 0) {
+                                            obstacle.userData.hit = true; obstacle.userData.toRemove = true;
+                                            createExplosion(obstacle.position, 0x9933ff, 40); 
+                                        }
+                                        break;
+                                    }
+                                }
+                                else if (obstacle.userData.type === 'deathstar') {
+                                    obstacle.userData.hp -= 1;
+                                    createExplosion(projectile.position, 0xffaa00, 15); 
+                                    projectile.userData.toRemove = true;
+                                    if (obstacle.userData.hp <= 0) {
+                                        obstacle.userData.hit = true; obstacle.userData.toRemove = true;
+                                        createExplosion(obstacle.position, 0xffffff, 100); 
+                                        flashScreenLong('#ffffff'); score += 200;
+                                        showGameAlert("🏆 成功擊毀死星 +200分！", "#00bfff");
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 敵方雷射飛行
+                for (let i = enemyBeams.length - 1; i >= 0; i--) {
+                    const beam = enemyBeams[i];
+                    beam.position.z += beam.userData.speedZ * delta;
+                    beam.position.x += beam.userData.vx * delta;
+                    beam.position.y += beam.userData.vy * delta;
+
+                    if (!beam.userData.hitPlayer && beam.position.z >= -5 && beam.position.z <= 5) {
+                        if (spaceship) {
+                            let dist = beam.position.distanceTo(spaceship.position);
+                            if (dist < beam.userData.radius + 1.2) {
+                                beam.userData.hitPlayer = true; hp -= 50; 
+                                if (hp < 0) hp = 0;
+                                document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                flashScreen('#00ff33'); createExplosion(spaceship.position, 0x00ff33, 20);
+                                if (hp <= 0) gameOver();
+                            }
+                        }
+                    }
+                    if (beam.position.z > 25) { beam.userData.toRemove = true; }
+                }
+
+                // 物件與AI更新
+                let droneIndexCounter = 0; 
+                let droneCounterTemp = 0;
+
+                // 預先取得死星物件（若存活且未被標記移除）
+                const activeDeathStar = obstacles.find(o => o && o.userData && o.userData.type === 'deathstar' && !o.userData.toRemove);
+
+                for (let i = 0; i < obstacles.length; i++) {
+                    const obj = obstacles[i];
+                    if (!obj || !obj.userData || obj.userData.toRemove) continue;
+                    
+                    if (obj.userData.type === 'drone') {
+                        obj.rotation.x += obj.userData.rotX; obj.rotation.y += obj.userData.rotY;
+
+                        // 【修復優化點】：若野生無人機（arrive 或 chain）接觸到死星，自動引爆且不對死星造成任何傷害
+                        if ((obj.userData.phase === 'arrive' || obj.userData.phase === 'chain') && activeDeathStar) {
+                            let distToBoss = obj.position.distanceTo(activeDeathStar.position);
+                            if (distToBoss < (obj.userData.radius + activeDeathStar.userData.radius * 0.95)) {
+                                obj.userData.hit = true; 
+                                obj.userData.toRemove = true; // 標記無人機炸毀移除
+                                createExplosion(obj.position, 0x9933ff, 35); // 觸發紫色自爆粒子
+                                showGameAlert("💥 無人機擦撞死星自動引爆！", "#9933ff");
+                                continue;
+                            }
+                        }
+
+                        if (obj.userData.phase === 'arrive') {
+                            obj.position.z -= baseSpeed * 1.5 * delta; 
+                            const targetTargetX = obj.userData.targetSide * (boundsX * 0.7);
+                            obj.position.x += (targetTargetX - obj.position.x) * 0.05;
+                            obj.position.y += (0 - obj.position.y) * 0.05;
+                            if (obj.position.z <= -15) obj.userData.phase = 'chain';
+                        } 
+                        else if (obj.userData.phase === 'chain') {
+                            obj.userData.hoverAngle += delta * 2; 
+                            const radius = 5;
+                            obj.position.z = -18;
+                            obj.position.x = Math.sin(obj.userData.hoverAngle) * radius + (obj.userData.targetSide * 6);
+                            obj.position.y = Math.cos(obj.userData.hoverAngle) * radius;
+
+                            if (gameActive && spaceship && droneIndexCounter < maxDroneLimit && !isNaN(obj.position.x) && !isNaN(spaceship.position.x)) {
+                                const currentLine = chainLinesPool[droneIndexCounter]; 
+                                if (currentLine) {
+                                    scene.add(currentLine); 
+                                    const points = []; points.push(obj.position.clone());
+                                    for(let p=1; p<5; p++) {
+                                        let t = p / 5;
+                                        let midPoint = new THREE.Vector3(
+                                            obj.position.x + (spaceship.position.x - obj.position.x) * t,
+                                            obj.position.y + (spaceship.position.y - obj.position.y) * t,
+                                            obj.position.z + (spaceship.position.z - obj.position.z) * t
+                                        );
+                                        midPoint.x += (Math.random() - 0.5) * 0.8; midPoint.y += (Math.random() - 0.5) * 0.8;
+                                        points.push(midPoint);
+                                    }
+                                    points.push(spaceship.position.clone());
+                                    currentLine.geometry.setFromPoints(points); droneIndexCounter++; 
+                                }
+                            }
+                        } 
+                        else if (obj.userData.phase === 'captured') {
+                            obj.userData.hoverAngle -= delta * 4.0; 
+                            const orbitRadius = 4.2; 
+                            if (spaceship) {
+                                obj.position.z = spaceship.position.z - 0.5; 
+                                obj.position.x = spaceship.position.x + Math.sin(obj.userData.hoverAngle) * orbitRadius;
+                                obj.position.y = spaceship.position.y + Math.cos(obj.userData.hoverAngle) * orbitRadius;
+                            }
+
+                            for (let k = 0; k < obstacles.length; k++) {
+                                let ast = obstacles[k];
+                                if (ast && ast.userData && ast.userData.type === 'asteroid' && !ast.userData.toRemove && !ast.userData.hit) {
+                                    let distance = obj.position.distanceTo(ast.position);
+                                    if (distance < (obj.userData.radius + ast.userData.radius * 0.95)) {
+                                        ast.userData.hit = true; ast.userData.toRemove = true; 
+                                        createExplosion(ast.position, 0xd2691e, 35);
+
+                                        obj.userData.hit = true; obj.userData.toRemove = true; 
+                                        createExplosion(obj.position, 0x9933ff, 40); 
+                                        showGameAlert("盾牌格擋：無人機防禦犧牲！", "#bd00ff");
+                                        break;
+                                    }
+                                }
+                            }
+                        } 
+                        else if (obj.userData.phase === 'launched') {
+                            obj.position.z -= projectileSpeed * 0.6 * delta; 
+                            
+                            for (let k = 0; k < obstacles.length; k++) {
+                                let targetObj = obstacles[k];
+                                if (!targetObj || !targetObj.userData || targetObj.userData.toRemove || targetObj === obj) continue;
+                                
+                                let collideDist = obj.position.distanceTo(targetObj.position);
+                                if (collideDist < (obj.userData.radius + targetObj.userData.radius * 0.9)) {
+                                    if (targetObj.userData.type === 'asteroid') {
+                                        targetObj.userData.hit = true; targetObj.userData.toRemove = true; 
+                                        createExplosion(targetObj.position, 0xd2691e, 40); 
+                                        
+                                        obj.userData.hit = true; obj.userData.toRemove = true; 
+                                        createExplosion(obj.position, 0xbd00ff, 35);
+                                        break;
+                                    } 
+                                    else if (targetObj.userData.type === 'deathstar') {
+                                        targetObj.userData.hp -= 3; 
+                                        obj.userData.hit = true; obj.userData.toRemove = true; 
+                                        createExplosion(obj.position, 0xbd00ff, 50); 
+                                        
+                                        if (targetObj.userData.hp <= 0) {
+                                            targetObj.userData.hit = true; targetObj.userData.toRemove = true;
+                                            createExplosion(targetObj.position, 0xffffff, 100);
+                                            flashScreenLong('#ffffff'); score += 200;
+                                            showGameAlert("🏆 成功擊毀死星 +200分！", "#00bfff");
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                            if (obj.userData.toRemove) continue;
+                            if (obj.position.z < -180) { obj.userData.toRemove = true; } 
+                            continue;
+                        }
+
+                        if (obj.userData.phase === 'arrive' || obj.userData.phase === 'chain') {
+                            for (let k = 0; k < obstacles.length; k++) {
+                                let ast = obstacles[k];
+                                if (ast && ast.userData && ast.userData.type === 'asteroid' && !ast.userData.toRemove) {
+                                    if (obj.position.distanceTo(ast.position) < (obj.userData.radius + ast.userData.radius)) {
+                                        ast.userData.hit = true; ast.userData.toRemove = true;
+                                        obj.userData.hp -= 1; createExplosion(ast.position, 0xd2691e, 20);
+                                        if (obj.userData.hp <= 0) {
+                                            obj.userData.hit = true; obj.userData.toRemove = true;
+                                            createExplosion(obj.position, 0x9933ff, 40); 
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (obj.userData.type === 'deathstar') {
+                        obj.rotation.y += obj.userData.rotY;
+                        obj.position.z += baseSpeed * 0.125 * delta; 
+                        obj.userData.fireTimer += delta;
+                        if (obj.userData.fireTimer >= 5.0) { obj.userData.fireTimer = 0; fireDeathBeam(obj.position); }
+
+                        if(spaceship) {
+                            const leftWingWorld = new THREE.Vector3(); const rightWingWorld = new THREE.Vector3();
+                            leftWing.getWorldPosition(leftWingWorld); rightWing.getWorldPosition(rightWingWorld);
+                            if (spaceship.position.distanceTo(obj.position) < obj.userData.radius || leftWingWorld.distanceTo(obj.position) < obj.userData.radius || rightWingWorld.distanceTo(obj.position) < obj.userData.radius) {
+                                hp = 0; document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                createExplosion(spaceship.position, 0xff0000, 80); gameOver(); continue;
+                            }
+                        }
+
+                        for (let k = 0; k < obstacles.length; k++) {
+                            let ast = obstacles[k];
+                            if (ast && ast.userData && ast.userData.type === 'asteroid' && !ast.userData.toRemove) {
+                                if (obj.position.distanceTo(ast.position) < (obj.userData.radius + ast.userData.radius * 0.6)) {
+                                    ast.userData.hit = true; ast.userData.toRemove = true;
+                                    createExplosion(ast.position, 0x555555, 15); 
+                                }
+                            }
+                        }
+
+                        if (obj.position.z > 25) { 
+                            score = Math.max(0, score - 100); obj.userData.toRemove = true;
+                            showGameAlert("❌ 死星逃脫 扣除100分！", "#ff4d4d"); 
+                        }
+                        continue;
+                    }
+
+                    obj.position.z += baseSpeed * delta; 
+                    if (obj.userData.type === 'asteroid') { obj.rotation.x += obj.userData.rotX; obj.rotation.y += obj.userData.rotY; }
+
+                    if (obj.position.z >= -1.5 && obj.position.z <= 1.5) {
+                        const leftWingWorld = new THREE.Vector3(); const rightWingWorld = new THREE.Vector3();
+                        leftWing.getWorldPosition(leftWingWorld); rightWing.getWorldPosition(rightWingWorld);
+                        
+                        if (spaceship.position.distanceTo(obj.position) < obj.userData.radius * 1.1 || leftWingWorld.distanceTo(obj.position) < obj.userData.radius || rightWingWorld.distanceTo(obj.position) < obj.userData.radius) {
+                            obj.userData.hit = true; obj.userData.toRemove = true;
+                            
+                            if (obj.userData.type === 'asteroid') {
+                                hp -= 25; if (hp < 0) hp = 0;
+                                document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                flashScreen('#ff3333'); createExplosion(obj.position, 0xff0000, 30); 
+                                if (hp <= 0) gameOver(); 
+                            } else if (obj.userData.type === 'heal') {
+                                hp = Math.min(100, hp + 20); document.getElementById('hud-hp').innerText = `HP: ${hp}`;
+                                flashScreen('#33ff33'); createExplosion(obj.position, 0x00ff00, 60); 
+                            } else if (obj.userData.type === 'ring') {
+                                score += isAdvancedMode ? 200 : 100;
+                                flashScreen('#00ffff'); createExplosion(obj.position, 0x00ffff, 40); 
+                            } 
+                            else if (obj.userData.type === 'force') {
+                                flashScreen('#bd00ff'); createExplosion(obj.position, 0xbd00ff, 65); 
+                                showGameAlert("✨ 原力覺醒！無人機已被全面俘獲！", "#bd00ff");
+                                
+                                chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
+                                
+                                obstacles.forEach(o => {
+                                    if (o && o.userData && o.userData.type === 'drone' && (o.userData.phase === 'chain' || o.userData.phase === 'arrive') && !o.userData.toRemove) {
+                                        o.userData.phase = 'captured'; 
+                                        o.userData.hoverAngle = (droneCounterTemp * (Math.PI * 2 / maxDroneLimit));
+                                        droneCounterTemp++;
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    if (obj.position.z > 15) { obj.userData.toRemove = true; }
+                }
+
+                // 垃圾清理
+                obstacles.forEach(o => { if(o.userData.toRemove) scene.remove(o); });
+                obstacles = obstacles.filter(o => !o.userData.toRemove);
+
+                projectiles.forEach(p => { if(p.userData.toRemove) scene.remove(p); });
+                projectiles = projectiles.filter(p => !p.userData.toRemove);
+
+                enemyBeams.forEach(b => { if(b.userData.toRemove) scene.remove(b); });
+                enemyBeams = enemyBeams.filter(b => !b.userData.toRemove);
+            }
+
+            for (let i = particlesSystems.length - 1; i >= 0; i--) {
+                const sys = particlesSystems[i]; sys.userData.age += delta; 
+                const posAttr = sys.geometry.attributes.position; const vels = sys.userData.velocities; 
+                for (let j = 0; j < vels.length; j++) {
+                    posAttr.array[j * 3] += vels[j].x * delta;     
+                    posAttr.array[j * 3 + 1] += vels[j].y * delta; 
+                    posAttr.array[j * 3 + 2] += vels[j].z * delta; 
+                }
+                posAttr.needsUpdate = true; 
+                const lifeRatio = sys.userData.age / sys.userData.maxAge;
+                sys.material.opacity = 1.0 - lifeRatio; sys.material.size = 0.6 * (1.0 - lifeRatio * 0.4); 
+                if (sys.userData.age >= sys.userData.maxAge) {
+                    scene.remove(sys); sys.geometry.dispose(); sys.material.dispose(); particlesSystems.splice(i, 1);
+                }
+            }
+            if(renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            if(camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); 
+                renderer.setSize(window.innerWidth, window.innerHeight); updateScreenBounds(); 
+            }
+        }
+    </script>
+</body>
+</html>
