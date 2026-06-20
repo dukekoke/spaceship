@@ -2,21 +2,33 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (野生無人機碰撞修正版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>太空飛船：隕城危機 3D (Safari 觸控修正版)</title>
     <style>
         * {
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none !important; 
+            -webkit-tap-highlight-color: transparent;
         }
-        body, html {
-            margin: 0; padding: 0;
-            width: 100%; height: 100%;
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             background-color: #000;
             font-family: Arial, sans-serif;
+            overscroll-behavior: none;
+            -webkit-text-size-adjust: 100%;
+        }
+        #canvas-container,
+        .ui-layer,
+        .controls,
+        .joystick-base,
+        .joystick-handle,
+        #btn-fire {
+            touch-action: none !important;
         }
         @media screen and (orientation: portrait) {
             #portrait-warning { display: flex !important; }
@@ -93,22 +105,61 @@
         #btn-fire:active { background: rgba(255, 100, 100, 0.7); }
 
         .overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(5, 5, 15, 0.95); display: flex;
-            justify-content: center; align-items: center; color: white;
-            z-index: 9999; pointer-events: auto !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 15, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 9999;
+            pointer-events: auto !important;
+            padding: max(12px, env(safe-area-inset-top))
+                     max(12px, env(safe-area-inset-right))
+                     max(12px, env(safe-area-inset-bottom))
+                     max(12px, env(safe-area-inset-left));
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y !important;
         }
         .menu-card {
-            background: rgba(30, 30, 40, 0.95); border: 2px solid #444;
-            border-radius: 10px; padding: 20px 35px; text-align: center;
-            max-width: 580px; width: 95%; box-shadow: 0 0 20px rgba(0,191,255,0.5);
+            background: rgba(30, 30, 40, 0.95);
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px 35px;
+            text-align: center;
+            max-width: 580px;
+            width: 95%;
+            box-shadow: 0 0 20px rgba(0,191,255,0.5);
+            max-height: calc(100vh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: pan-y !important;
         }
-        .menu-card h1 { margin-top: 0; color: #00bfff; font-size: 24px; }
+        .menu-card h1 { margin-top: 0; color: #00bfff; font-size: 24px; flex: 0 0 auto; }
         
         .info-desc {
-            text-align: left; font-size: 13px; line-height: 1.6; color:#ccc; 
-            margin: 10px 0; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px;
-            max-height: 250px; overflow-y: auto; border: 1px solid #333;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #ccc;
+            margin: 10px 0;
+            background: rgba(0,0,0,0.3);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            flex: 1 1 auto;
+            min-height: 120px;
+            max-height: min(42vh, 260px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y !important;
+            scrollbar-width: thin;
         }
         .section-header { font-weight: bold; color: #00bfff; font-size: 14px; margin-top: 8px; border-bottom: 1px solid #444; padding-bottom: 2px;}
         .section-header.advanced { color: #ff4d4d; border-color: #ff3333; }
@@ -119,6 +170,7 @@
             padding: 12px 40px; font-size: 18px; font-weight: bold;
             border-radius: 5px; cursor: pointer; margin-top: 10px;
             display: inline-block; box-shadow: 0 4px 10px rgba(0, 191, 255, 0.4);
+            touch-action: manipulation;
         }
         .start-btn:hover { background: #0099cc; }
         .leaderboard-table { width: 100%; margin: 15px 0; border-collapse: collapse; }
@@ -129,9 +181,10 @@
             margin: 10px 0;
             display: flex; justify-content: center; align-items: center;
             font-size: 16px; font-weight: bold; color: #fff;
+            flex: 0 0 auto;
         }
         .mode-label { margin-right: 15px; text-shadow: 0 0 10px rgba(0, 191, 255, 0.5); }
-        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; touch-action: manipulation; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider {
             position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
@@ -543,21 +596,24 @@
             }
 
             base.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 if (joystickTouchId !== null) return; 
                 const touch = e.changedTouches[0];
                 joystickTouchId = touch.identifier; 
                 handleMove(touch.clientX, touch.clientY);
-            }, { passive: true });
+            }, { passive: false });
 
             window.addEventListener('touchmove', (e) => {
                 if (joystickTouchId === null) return;
                 for (let i = 0; i < e.touches.length; i++) {
                     if (e.touches[i].identifier === joystickTouchId) {
+                        e.preventDefault();
                         handleMove(e.touches[i].clientX, e.touches[i].clientY);
                         break;
                     }
                 }
-            }, { passive: true });
+            }, { passive: false });
 
             const endHandler = (e) => {
                 if (joystickTouchId === null) return;
@@ -580,6 +636,24 @@
         }
 
         function setupControls() {
+            // iOS Safari 雙擊縮放防護：只阻止遊戲控制區，不影響說明視窗捲動。
+            let lastTouchEndTime = 0;
+            document.addEventListener('touchend', function(e) {
+                const now = performance.now();
+                if (now - lastTouchEndTime <= 350) {
+                    const target = e.target;
+                    if (
+                        target.closest('#btn-fire') ||
+                        target.closest('#joy-base') ||
+                        target.closest('#canvas-container') ||
+                        target.closest('.ui-layer')
+                    ) {
+                        e.preventDefault();
+                    }
+                }
+                lastTouchEndTime = now;
+            }, { passive: false });
+
             initJoystick(); 
             const startBtn = document.getElementById('real-start-btn');
             if(startBtn) startBtn.onclick = function() { forceUnlockAndStart(); };
@@ -588,9 +662,36 @@
             if(realRestart) realRestart.onclick = function() { restartGame(); };
 
             const btnFire = document.getElementById('btn-fire');
-            if(btnFire) {
-                btnFire.addEventListener('touchstart', (e) => { fireProjectile(); }, { passive: true });
-                btnFire.onmousedown = function(e) { fireProjectile(); };
+            if (btnFire) {
+                let lastFireTouchTime = 0;
+
+                const fireByTouch = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    lastFireTouchTime = performance.now();
+                    fireProjectile();
+                };
+
+                btnFire.addEventListener('touchstart', fireByTouch, { passive: false });
+                btnFire.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, { passive: false });
+                btnFire.addEventListener('touchcancel', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, { passive: false });
+                btnFire.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                btnFire.onmousedown = function(e) {
+                    if (performance.now() - lastFireTouchTime < 500) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fireProjectile();
+                };
             }
             
             window.addEventListener('mousemove', (e) => {
