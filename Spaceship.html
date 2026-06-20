@@ -1050,7 +1050,7 @@
                         } 
                         else if (obj.userData.phase === 'captured') {
                             obj.userData.hoverAngle -= delta * 4.0; 
-                            const orbitRadius = 4.2; 
+                            const orbitRadius = 5; 
                             if (spaceship) {
                                 obj.position.z = spaceship.position.z - 0.5; 
                                 obj.position.x = spaceship.position.x + Math.sin(obj.userData.hoverAngle) * orbitRadius;
