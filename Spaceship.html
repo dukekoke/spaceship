@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (立體綠色死亡光束版)</title>
+    <title>太空飛船：隕城危機 3D (多點觸控流暢優化版)</title>
     <style>
+        /* 核心修復：強制所有元素停用瀏覽器預設的觸控反白與手勢 (touch-action: none) */
         * {
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none !important; 
         }
         body, html {
             margin: 0; padding: 0;
@@ -46,13 +48,15 @@
             align-items: flex-end; margin-bottom: 10px;
             pointer-events: auto; width: 100%;
         }
+        /* 搖桿外圈：確保 pointer-events 正常，開啟獨立點擊 */
         .joystick-base {
             width: 140px; height: 140px;
             background: rgba(255, 255, 255, 0.1);
             border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%; position: relative;
             backdrop-filter: blur(5px); display: flex;
-            justify-content: center; align-items: center; touch-action: none;
+            justify-content: center; align-items: center;
+            pointer-events: auto;
         }
         .joystick-handle {
             width: 55px; height: 55px;
@@ -60,6 +64,7 @@
             border: 2px solid rgba(255, 255, 255, 0.7);
             border-radius: 50%; position: absolute;
             cursor: pointer; box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+            pointer-events: none; /* 讓事件由基座統一控管，防多點錯亂 */
         }
         .joystick-base:active .joystick-handle { background: rgba(255, 255, 255, 0.6); }
 
@@ -71,7 +76,7 @@
             font-size: 22px; font-weight: bold;
             display: flex; justify-content: center; align-items: center;
             backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(255, 50, 50, 0.5);
-            cursor: pointer;
+            cursor: pointer; pointer-events: auto;
         }
         #btn-fire:active { background: rgba(255, 100, 100, 0.7); }
 
@@ -146,10 +151,7 @@
             <p style="text-align: left; font-size: 13px; line-height: 1.5; color:#ccc; margin-bottom: 5px;">
                1. 左手【圓圈搖桿】：控制 360 度位移。<br>
                2. 【雙模翻轉】：手機左傾時逆時針翻滾，右傾順時針翻滾。<br>
-               3. 右手紅色按鈕/滑鼠左鍵/Enter：發射武器。<br>
-               4. <strong>【強敵機制優化公告】</strong>：<br>
-               &nbsp;&nbsp;&nbsp;&bull; <strong>無人機蜂群</strong>：畫面最高上限為 6 台，各自對我機連接專屬麻痺鎖鏈。<br>
-               &nbsp;&nbsp;&nbsp;&bull; <strong>極緩死星</strong>：體積巨大且呈淺灰色，5秒會發射**一道實體長條狀的綠色雷射巨砲**（移速為死星的2倍），中彈重扣 50HP。<strong>我機直接撞擊死星將立刻引爆！</strong>
+               3. <strong>【多點觸控優化版】</strong>：徹底解決雙手同時操作時，發射鍵或搖桿失靈抽風的問題！
             </p>
             
             <div class="mode-container">
@@ -209,9 +211,10 @@
 
         let chainLinesPool = []; 
         const maxDroneLimit = 6; 
-
-        // 【新增全域追蹤】：存放死星發射出來的實體長條狀綠色雷射柱
         let enemyBeams = [];
+
+        // 【多點觸控核心修正】：紀錄當前控制虛擬搖桿的手指 Touch ID，防止被右手開火事件覆蓋
+        let joystickTouchId = null; 
 
         document.addEventListener('DOMContentLoaded', () => {
             init3D();
@@ -241,7 +244,6 @@
             createSpaceship();
             updateScreenBounds();
 
-            // 預建鎖鏈線條物件池
             for(let i = 0; i < maxDroneLimit; i++) {
                 const chainMat = new THREE.LineBasicMaterial({ color: 0x9933ff, linewidth: 2 });
                 const chainGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
@@ -422,61 +424,96 @@
             projectiles.push(projectile); 
         }
 
-        // 【新增機制】：由死星正前方衍生、射向玩家的實體綠色長條狀雷射巨砲
         function fireDeathBeam(originPos) {
-            // 建立一個長度 35、半徑 0.8 的巨大圓柱體雷射柱
             const geo = new THREE.CylinderGeometry(0.8, 0.8, 35, 12);
-            geo.rotateX(Math.PI / 2); // 轉平使其指向前方
+            geo.rotateX(Math.PI / 2); 
             const mat = new THREE.MeshBasicMaterial({ color: 0x00ff33, transparent: true, opacity: 0.85 });
             const beamMesh = new THREE.Mesh(geo, mat);
-            
-            // 讓綠色雷射柱出生在死星的前緣
             beamMesh.position.copy(originPos);
-            beamMesh.position.z += 6.0; // 往前推移球體半徑
+            beamMesh.position.z += 6.0; 
             
-            // 計算鎖定我機當時的X/Y平移偏移軌跡
             let targetX = spaceship ? spaceship.position.x : 0;
             let targetY = spaceship ? spaceship.position.y : 0;
-            
-            // 計算斜率向量分量，用以進行 3D 長條前進引導
-            let zDist = 90; // 從出生到玩家的預估Z深
+            let zDist = 90; 
             beamMesh.userData = {
                 vx: (targetX - beamMesh.position.x) / zDist * (baseSpeed * 2.0),
                 vy: (targetY - beamMesh.position.y) / zDist * (baseSpeed * 2.0),
-                speedZ: baseSpeed * 2.0, // 【速率修改】：固定為死星推進移速的 2 倍前進
-                radius: 1.8, // 綠色巨砲寬廣的世界碰撞判定半徑
+                speedZ: baseSpeed * 2.0, 
+                radius: 1.8, 
                 hitPlayer: false
             };
-            
             scene.add(beamMesh);
             enemyBeams.push(beamMesh);
         }
 
+        // 【多點觸控核心修正】：利用更改後的 Touch 事件流精確區分左右手手指
         function initJoystick() {
             const base = document.getElementById('joy-base');
             const handle = document.getElementById('joy-handle');
             if(!base || !handle) return;
-            let isDragging = false; const maxRadius = 45; 
+            const maxRadius = 45; 
 
             function handleMove(clientX, clientY) {
-                if (!isDragging) return;
                 const rect = base.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2; const centerY = rect.top + rect.height / 2; 
-                let deltaX = clientX - centerX; let deltaY = clientY - centerY;
+                const centerX = rect.left + rect.width / 2; 
+                const centerY = rect.top + rect.height / 2; 
+                let deltaX = clientX - centerX; 
+                let deltaY = clientY - centerY;
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY); 
+
                 if (distance > maxRadius) {
-                    deltaX = (deltaX / distance) * maxRadius; deltaY = (deltaY / distance) * maxRadius;
+                    deltaX = (deltaX / distance) * maxRadius;
+                    deltaY = (deltaY / distance) * maxRadius;
                 }
                 handle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-                joystickVector.x = deltaX / maxRadius; joystickVector.y = -(deltaY / maxRadius);
+                joystickVector.x = deltaX / maxRadius;
+                joystickVector.y = -(deltaY / maxRadius);
             }
-            function handleEnd() { isDragging = false; handle.style.transform = `translate(0px, 0px)`; joystickVector.x = 0; joystickVector.y = 0; }
-            base.addEventListener('touchstart', (e) => { isDragging = true; if(e.touches?e.touches[0]:false) handleMove(e.touches[0].clientX, e.touches[0].clientY); });
-            window.addEventListener('touchmove', (e) => { if (isDragging && (e.touches?e.touches[0]:false)) handleMove(e.touches[0].clientX, e.touches[0].clientY); });
-            window.addEventListener('touchend', handleEnd);
-            base.addEventListener('mousedown', (e) => { isDragging = true; handleMove(e.clientX, e.clientY); });
-            window.addEventListener('mousemove', (e) => { handleMove(e.clientX, e.clientY); });
-            window.addEventListener('mouseup', handleEnd);
+
+            // 1. 綁定 touchstart 并鎖定第一根按在搖桿上的 Touch ID
+            base.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // 明確阻止預設縮放
+                if (joystickTouchId !== null) return; // 已經有手指在控搖桿了，無視其他觸控
+                
+                const touch = e.changedTouches[0];
+                joystickTouchId = touch.identifier; // 鎖定這根手指的身份
+                handleMove(touch.clientX, touch.clientY);
+            }, { passive: false });
+
+            // 2. 只有當對應的 Touch ID 手指滑動時，才更新搖桿向量
+            window.addEventListener('touchmove', (e) => {
+                if (joystickTouchId === null) return;
+                
+                // 從多個觸控點中找出控制搖桿的那根手指
+                for (let i = 0; i < e.touches.length; i++) {
+                    if (e.touches[i].identifier === joystickTouchId) {
+                        handleMove(e.touches[i].clientX, e.touches[i].clientY);
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            // 3. 當控制搖桿的手指離開時，才觸發搖桿回正
+            const endHandler = (e) => {
+                if (joystickTouchId === null) return;
+                
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joystickTouchId) {
+                        joystickTouchId = null; // 解鎖 ID
+                        handle.style.transform = `translate(0px, 0px)`; 
+                        joystickVector.x = 0; joystickVector.y = 0;     
+                        break;
+                    }
+                }
+            };
+            window.addEventListener('touchend', endHandler);
+            window.addEventListener('touchcancel', endHandler);
+
+            // 保持電腦滑鼠功能正常
+            let isMouseDown = false;
+            base.addEventListener('mousedown', (e) => { isMouseDown = true; handleMove(e.clientX, e.clientY); });
+            window.addEventListener('mousemove', (e) => { if (isMouseDown) handleMove(e.clientX, e.clientY); });
+            window.addEventListener('mouseup', () => { isMouseDown = false; handle.style.transform = `translate(0px, 0px)`; joystickVector.x = 0; joystickVector.y = 0; });
         }
 
         function setupControls() {
@@ -486,10 +523,14 @@
             if(startBtn) startBtn.onclick = function() { forceUnlockAndStart(); };
             if(restartBtn) restartBtn.onclick = function() { restartGame(); };
 
+            // 右手發射按鈕優化：明確阻斷觸控穿透，綁定 `{ passive: false }` 取得秒開火最高權限
             const btnFire = document.getElementById('btn-fire');
             if(btnFire) {
-                btnFire.onmousedown = function() { fireProjectile(); };
-                btnFire.ontouchstart = function(e) { fireProjectile(); };
+                btnFire.onmousedown = function(e) { e.preventDefault(); fireProjectile(); };
+                btnFire.addEventListener('touchstart', (e) => {
+                    e.preventDefault(); // 阻止多點觸控時網頁放大
+                    fireProjectile();
+                }, { passive: false });
             }
             
             window.addEventListener('mousemove', (e) => {
@@ -559,6 +600,7 @@
 
             gameActive = true; hp = 100; score = 0; gameTime = 0; spawnTimer = 0; 
             currentMoveSpeed = baseMoveSpeed; 
+            joystickTouchId = null; // 重置 Touch ID
             
             document.getElementById('hud-hp').innerText = `HP: ${hp}`;
             document.getElementById('hud-score').innerText = `分數: ${score}`;
@@ -566,8 +608,6 @@
             obstacles.forEach(obj => scene.remove(obj)); obstacles = [];
             projectiles.forEach(obj => scene.remove(obj)); projectiles = [];
             particlesSystems.forEach(obj => scene.remove(obj)); particlesSystems = [];
-            
-            // 清理舊長條雷射
             enemyBeams.forEach(b => scene.remove(b)); enemyBeams = [];
             
             chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
@@ -586,7 +626,7 @@
         function gameOver() {
             gameActive = false;
             chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
-            enemyBeams.forEach(b => scene.remove(b)); // 結束拆除雷射
+            enemyBeams.forEach(b => scene.remove(b)); 
             document.getElementById('final-score').innerText = Math.floor(score); 
             saveLeaderboard(Math.floor(score)); showLeaderboard(); 
             document.getElementById('gameover-overlay').style.display = 'flex'; 
@@ -631,7 +671,6 @@
                 document.getElementById('hud-score').innerText = `分數: ${Math.floor(score)}`;
 
                 const activeDrones = obstacles.filter(o => o.userData.type === 'drone' && o.userData.phase !== 'arrive' && !o.userData.hit);
-                
                 if (activeDrones.length > 0) {
                     currentMoveSpeed = baseMoveSpeed * 0.3; 
                 } else {
@@ -726,36 +765,28 @@
                     }
                 }
 
-                // 【新增機制】：死星發射出的綠色實體長條雷射柱物理移動與中彈判定
+                // 敵方實體綠色長條雷射柱物理位移與碰撞
                 for (let i = enemyBeams.length - 1; i >= 0; i--) {
                     const beam = enemyBeams[i];
-                    // 根據當初發射鎖定的斜率與 2 倍速前進
                     beam.position.z += beam.userData.speedZ * delta;
                     beam.position.x += beam.userData.vx * delta;
                     beam.position.y += beam.userData.vy * delta;
 
-                    // 當綠色雷射巨砲掃過玩家交會面 Z=[-5, 5] 時
                     if (!beam.userData.hitPlayer && beam.position.z >= -5 && beam.position.z <= 5) {
                         if (spaceship) {
                             let dist = beam.position.distanceTo(spaceship.position);
-                            // 只要長條光束圓柱體擦到我機
                             if (dist < beam.userData.radius + 1.2) {
                                 beam.userData.hitPlayer = true;
-                                hp -= 50; // 中彈重扣 50 點生命
+                                hp -= 50; 
                                 if (hp < 0) hp = 0;
                                 document.getElementById('hud-hp').innerText = `HP: ${hp}`;
-                                flashScreen('#00ff33'); // 綠色閃屏警告
+                                flashScreen('#00ff33'); 
                                 createExplosion(spaceship.position, 0x00ff33, 20);
                                 if (hp <= 0) gameOver();
                             }
                         }
                     }
-
-                    // 超過螢幕邊界安全釋放
-                    if (beam.position.z > 25) {
-                        scene.remove(beam);
-                        enemyBeams.splice(i, 1);
-                    }
+                    if (beam.position.z > 25) { scene.remove(beam); enemyBeams.splice(i, 1); }
                 }
 
                 // 敵方AI更新
@@ -829,18 +860,14 @@
 
                     if (obj.userData.type === 'deathstar') {
                         obj.rotation.y += obj.userData.rotY;
-                        // 死星以基礎移速的 12.5% 極緩前進
                         obj.position.z += baseSpeed * 0.125 * delta; 
 
                         obj.userData.fireTimer += delta;
                         if (obj.userData.fireTimer >= 5.0) {
                             obj.userData.fireTimer = 0;
-                            
-                            // 【更正修復點】：不再噴散無定向粒子，改為呼叫實體長條狀綠色雷射巨砲發射函式
                             fireDeathBeam(obj.position);
                         }
 
-                        // 我機碰撞死星直接歸零爆炸
                         if(spaceship) {
                             const leftWingWorld = new THREE.Vector3(); const rightWingWorld = new THREE.Vector3();
                             leftWing.getWorldPosition(leftWingWorld); rightWing.getWorldPosition(rightWingWorld);
@@ -873,7 +900,7 @@
                         continue;
                     }
 
-                    // 一般物件移動與判定
+                    // 一般物件移動判定
                     obj.position.z += baseSpeed * delta; 
                     if (!obj.userData.hit && obj.position.z >= -1.5 && obj.position.z <= 1.5) {
                         const leftWingWorld = new THREE.Vector3(); const rightWingWorld = new THREE.Vector3();
