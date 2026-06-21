@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>太空飛船：隕城危機 3D (死亡延遲流暢版)</title>
+    <title>太空飛船：隕城危機 3D (死星加分修正版)</title>
     <style>
         * {
             box-sizing: border-box;
@@ -232,13 +232,13 @@
                 <div class="info-title">🛸 無人機蜂群 (Drone)</div>
                 <div>會從後方超車並射出「麻痺鎖鏈」，每鎖鏈1台本機減速5%。若超過3台鎖定，每秒損失2分。**靠近死星會自動引爆**</div>
                 <div class="info-title">🌑 魔王：死星 (Death Star)</div>
-                <div>分數達 1000 分倍數降臨。5秒蓄力發射綠色雷射巨砲。擊毀或逼近時會觸發隱藏關卡！</div>
+                <div>分數達 1000 分倍數降臨。5秒蓄力發射綠色雷射巨砲。</div>
                 <div class="info-title">✨ 原力包 (Force Pack)</div>
                 <div>亮紫色神祕水晶。吃到後全面俘獲場上無人機化為圓形防禦網，按下發射鍵即可直線飛射擊碎障礙！</div>
 
                 <div class="section-header secret">✨ 3. 隱藏解鎖：死星內部峽谷戰</div>
                 <div class="info-title">💥 突入死星引力圈</div>
-                <div>當死星降臨並逼近，或被主砲重創時，將自動突入狹窄水泥峽谷。迎接高速追擊的帝國「鈦戰機」群與致命紅色集束子彈，極限存活 20 秒！</div>
+                <div>緊急突入死星水泥峽谷。迎接帝國「鈦戰機」群與致命紅色子彈，極限存活 20 秒！</div>
             </div>
             
             <div class="mode-container">
@@ -427,7 +427,7 @@
             tieProjectiles = [];
 
             document.getElementById('canvas-container').style.filter = 'url(#pixelate)';
-            showGameAlert("進入死星引力範圍，星球峽谷戰開始！", "#ffff00");
+            showGameAlert("死星逼近！突入地表防禦峽谷！", "#ffff00");
             
             setTimeout(() => {
                 const wallMat = new THREE.MeshStandardMaterial({color: 0x555555, roughness: 0.8});
@@ -594,7 +594,7 @@
         }
 
         function fireProjectile() {
-            if(!gameActive || hp <= 0) return; // 死亡時無法射擊
+            if(!gameActive || hp <= 0) return; 
             let hasCapturedDrones = obstacles.some(o => o && o.userData && o.userData.type === 'drone' && o.userData.phase === 'captured' && !o.userData.toRemove);
             if (hasCapturedDrones) {
                 obstacles.forEach(o => {
@@ -797,7 +797,7 @@
         function startGame() {
             const startOverlay = document.getElementById('start-overlay');
             if(startOverlay) startOverlay.style.display = 'none'; 
-            document.getElementById('game-ui').style.opacity = '1'; // 確保操作介面可見
+            document.getElementById('game-ui').style.opacity = '1'; 
             
             isSecretStage = false;
             secretStageTimer = 0;
@@ -864,32 +864,25 @@
             startGame();
         }
 
-        // --- 優化後的死亡判定：爆炸完再進排行榜 ---
         function gameOver() {
-            // 先隱藏畫面控制與 HUD 介面
             document.getElementById('game-ui').style.opacity = '0';
             
-            // 觸發我機華麗碎裂大爆炸
             if (spaceship) {
-                createExplosion(spaceship.position, 0xff2200, 140); // 核心火球粒子
-                createExplosion(spaceship.position, 0xffbb00, 80);  // 金色電漿碎片
-                createExplosion(spaceship.position, 0xffffff, 40);  // 白光強烈核心
+                createExplosion(spaceship.position, 0xff2200, 140); 
+                createExplosion(spaceship.position, 0xffbb00, 80);  
+                createExplosion(spaceship.position, 0xffffff, 40);  
                 scene.remove(spaceship);
             }
 
-            // 清除輔助鎖鏈
             chainLinesPool.forEach(line => { if(line.parent) scene.remove(line); });
 
-            // 延遲 1.2 秒（等待爆炸特效燃燒擴散結束），再正式凍結遊戲並彈出排行榜
             setTimeout(() => {
                 gameActive = false;
                 
-                // 清理剩餘關卡子彈與敵機
                 enemyBeams.forEach(b => { if(b) scene.remove(b); }); 
                 tieFighters.forEach(t => scene.remove(t));
                 tieProjectiles.forEach(p => scene.remove(p));
                 
-                // 更新排行榜數據並顯示
                 document.getElementById('final-score').innerText = Math.floor(score); 
                 saveLeaderboard(Math.floor(score)); 
                 showLeaderboard(); 
@@ -938,12 +931,12 @@
                 color: colorHex, size: 0.5, transparent: true, opacity: 1, blending: THREE.AdditiveBlending
             });
             const pSystem = new THREE.Points(geo, mat);
-            pSystem.userData = { velocities: velocities, age: 0, maxAge: 0.9 }; // 微調增加燃燒期
+            pSystem.userData = { velocities: velocities, age: 0, maxAge: 0.9 }; 
             scene.add(pSystem); particlesSystems.push(pSystem);
         }
 
         function flashScreen(color) {
-            if(renderer && hp > 0) { // 避免死後干擾爆炸視覺
+            if(renderer && hp > 0) { 
                 renderer.setClearColor(new THREE.Color(color), 0.4);
                 setTimeout(() => { if(renderer) renderer.setClearColor(0x020208, 1); }, 60);
             }
@@ -964,7 +957,6 @@
             const delta = (now - lastTime) / 1000; 
             lastTime = now;
             if (gameActive) {
-                // 如果飛船還活著才計算得分與前進
                 if (hp > 0) {
                     gameTime += delta;
                     score += delta * (isAdvancedMode ? 15 : 10); 
@@ -1094,8 +1086,8 @@
                     spawnTimer += delta * 1000;
                     if (spawnTimer >= spawnInterval && hp > 0) { spawnObject(); spawnTimer = 0; }
 
-                    const deathStar = obstacles.find(o => o.userData && o.userData.type === 'deathstar');
-                    if (deathStar && deathStar.position.z >= -10 && hp > 0) { 
+                    const deathStar = obstacles.find(o => o && o.userData && o.userData.type === 'deathstar' && !o.userData.toRemove && !o.userData.hit);
+                    if (deathStar && deathStar.position.z >= camera.position.z && hp > 0) { 
                         enterSecretStage(); 
                     }
 
@@ -1133,8 +1125,10 @@
                                     if (obstacle.userData.hp <= 0) {
                                         obstacle.userData.hit = true; obstacle.userData.toRemove = true;
                                         createExplosion(obstacle.position, 0xffffff, 100); 
-                                        flashScreenLong('#ffffff'); score += 200;
-                                        setTimeout(() => { if(hp > 0) enterSecretStage(); }, 800);
+                                        
+                                        // 【修改點】功能 1：成功摧毀死星時，加分調整為符合要求的 200 分
+                                        flashScreenLong('#ffffff'); score += 200; 
+                                        showGameAlert("🎯 成功摧毀死星！+200分", "#00ff00");
                                     }
                                     break;
                                 }
@@ -1263,8 +1257,10 @@
                                             if (targetObj.userData.hp <= 0) {
                                                 targetObj.userData.hit = true; targetObj.userData.toRemove = true;
                                                 createExplosion(targetObj.position, 0xffffff, 100);
+                                                
+                                                // 【修改點】功能 2：原力彈擊毀死星時，加分同步調整為符合要求的 200 分
                                                 flashScreenLong('#ffffff'); score += 200;
-                                                setTimeout(() => { if(hp > 0) enterSecretStage(); }, 800);
+                                                showGameAlert("🎯 擊毀死星！+200分", "#00ff00");
                                             }
                                             break;
                                         }
@@ -1296,7 +1292,7 @@
 
                         if (obj.userData.type === 'deathstar') {
                             obj.rotation.y += obj.userData.rotY;
-                            obj.position.z += baseSpeed * 0.125 * delta; 
+                            obj.position.z += baseSpeed * 0.16 * delta; 
                             obj.userData.fireTimer += delta;
                             if (obj.userData.fireTimer >= 5.0 && hp > 0) { obj.userData.fireTimer = 0; fireDeathBeam(obj.position); }
 
@@ -1321,9 +1317,7 @@
                             }
 
                             if (obj.position.z > 25) { 
-                                score = Math.max(0, score - 100);
                                 obj.userData.toRemove = true;
-                                showGameAlert("❌ 死星逃脫 扣除100分！", "#ff4d4d"); 
                             }
                             continue;
                         }
@@ -1382,7 +1376,6 @@
                     enemyBeams = enemyBeams.filter(b => !b.userData.toRemove);
                 }
 
-                // 即使死亡，粒子依然保持更新運算，確保爆炸畫面會動
                 for (let i = particlesSystems.length - 1; i >= 0; i--) {
                     const sys = particlesSystems[i];
                     sys.userData.age += delta; 
